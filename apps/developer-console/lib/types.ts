@@ -192,4 +192,79 @@ export type ControlResult = {
   error?: string | null;
 };
 
+export type DemoScenario = "success" | "conflict" | "cancel";
+
+export type DemoRunResult = {
+  ok: boolean;
+  scenario: DemoScenario;
+  events_injected: number;
+  pushed?: boolean;
+  mock?: boolean;
+};
+
+export type SetupCheckItem = {
+  id: string;
+  name: string;
+  configured: boolean;
+  detail: string;
+};
+
+export type SetupLink = {
+  title: string;
+  path: string;
+  url: string;
+};
+
+export type SetupStatus = {
+  mock: boolean;
+  machine_mode: string;
+  eeg_shadow_only: boolean;
+  ports: Record<string, string | number>;
+  crown: {
+    enabled: boolean;
+    mock: boolean;
+    env_vars_present: boolean;
+    shadow_only: boolean;
+  };
+  ganglion: {
+    enabled: boolean;
+    mock: boolean;
+    serial_port_set: boolean;
+  };
+  audio: {
+    enabled: boolean;
+    mock: boolean;
+    device_name_set: boolean;
+    sample_rate_hz?: number;
+  };
+  vision: {
+    enabled: boolean;
+    mock: boolean;
+    camera_index: number | null;
+    width?: number;
+    height?: number;
+    fps?: number;
+    object_ids: string[];
+  };
+  simulator: {
+    enabled: boolean;
+    mode: string;
+  };
+  checklist: SetupCheckItem[];
+  links: SetupLink[];
+  operator_notes: string[];
+};
+
+export type EmgCalibrationStatus = {
+  ok: boolean;
+  protocol: string;
+  phase: "idle" | "rest" | "confirm" | "cancel" | "false_trigger" | "complete" | string;
+  counts: Record<string, number>;
+  target_seconds: number;
+  target_count: number;
+  instruction: string;
+  eeg_used: boolean;
+  training_job: string | null;
+};
+
 export const PLOT_CAP = 150;

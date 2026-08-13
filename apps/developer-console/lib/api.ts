@@ -1,4 +1,13 @@
-import type { ControlResult, PreflightResult, PublicConfig, SessionRecord } from "./types";
+import type {
+  ControlResult,
+  DemoRunResult,
+  DemoScenario,
+  EmgCalibrationStatus,
+  PreflightResult,
+  PublicConfig,
+  SessionRecord,
+  SetupStatus,
+} from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
@@ -62,4 +71,17 @@ export const api = {
   sessions: () => apiGet<{ sessions: SessionRecord[] }>("/api/sessions"),
   session: (id: string) => apiGet<SessionRecord>(`/api/sessions/${id}`),
   replay: () => apiPost<{ ok: boolean; events_queued: number }>("/api/replay", { source: "fixtures" }),
+  setup: () => apiGet<SetupStatus>("/api/setup"),
+  runDemo: (scenario: DemoScenario) =>
+    apiPost<DemoRunResult>("/api/demo/run", { scenario }),
+  emgCalibrateStart: () => apiPost<EmgCalibrationStatus>("/api/calibrate/emg/start"),
+  emgCalibrateStatus: () => apiGet<EmgCalibrationStatus>("/api/calibrate/emg/status"),
+  emgCalibrateNext: () => apiPost<EmgCalibrationStatus>("/api/calibrate/emg/next"),
+  emgCalibrateRecord: () => apiPost<EmgCalibrationStatus>("/api/calibrate/emg/record"),
+  visionCalibrateComplete: () =>
+    apiPost<{ ok: boolean; complete: boolean }>("/api/calibrate/vision/complete"),
+  eegCalibrateAcknowledge: () =>
+    apiPost<{ ok: boolean; shadow_only: boolean; drives_action: boolean }>(
+      "/api/calibrate/eeg/acknowledge",
+    ),
 };

@@ -1,12 +1,14 @@
 "use client";
 
+import { useState } from "react";
+
 import { EmergencyStop } from "@/components/EmergencyStop";
 import { IntentInspector } from "@/components/IntentInspector";
 import { Sparkline } from "@/components/Sparkline";
 import { StatusPill } from "@/components/Status";
 import { api } from "@/lib/api";
 import { useBusyAction, useLive } from "@/lib/live";
-import type { VisionState } from "@/lib/types";
+import type { DemoScenario, VisionState } from "@/lib/types";
 
 function CameraView({ vision }: { vision: VisionState | null }) {
   const objects = vision?.objects ?? [];
@@ -55,6 +57,18 @@ export default function SessionPage() {
   const { snapshot, plots, connected } = useLive();
   const { busy, message, run } = useBusyAction();
   const session = snapshot?.session ?? null;
+  const [demoNote, setDemoNote] = useState<string | null>(null);
+
+  const runDemo = (scenario: DemoScenario) => {
+    setDemoNote(null);
+    void run(async () => {
+      const result = await api.runDemo(scenario);
+      setDemoNote(
+        `Injected ${result.events_injected} ${scenario} events` +
+          (result.pushed ? " to the hub." : " into the mock console path."),
+      );
+    });
+  };
 
   return (
     <>
@@ -118,6 +132,28 @@ export default function SessionPage() {
           ) : (
             <p className="muted">No active session. Complete preflight to start one.</p>
           )}
+          <h3>Run demo trial</h3>
+          <p className="muted">
+            Injects a timed audio + vision + EMG sequence. With the hub up, events PUSH to port
+            5555. In mock-only mode they still appear in this console.
+          </p>
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() => runDemo("success")}
+            >
+              Demo: success
+            </button>
+            <button type="button" className="btn" disabled={busy} onClick={() => runDemo("conflict")}>
+              Demo: conflict
+            </button>
+            <button type="button" className="btn" disabled={busy} onClick={() => runDemo("cancel")}>
+              Demo: cancel
+            </button>
+          </div>
+          {demoNote ? <p role="status">{demoNote}</p> : null}
           {message ? <p className="error">{message}</p> : null}
         </section>
         <div className="live-bottom">

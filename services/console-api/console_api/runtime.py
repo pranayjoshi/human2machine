@@ -24,11 +24,15 @@ from intent_contracts.enums import (
     SessionState,
 )
 from intent_contracts.envelope import EventEnvelope, new_event_id, now_monotonic_ns, now_wall_ns
+from intent_contracts.validation import parse_unnormalized_event
 from intent_runtime.config import load_stacked_config
 from intent_runtime.zmq_bus import AdapterPush, NormalizedSubscriber
 
+from console_api.calibrate import EmgCalibrationStub
 from console_api.catalog import SERVICE_CATALOG, resolve_service_id
 from console_api.control_plane import ControlPlane, ControlTransport
+from console_api.demo import load_scenario_spec, materialize_demo_events
+from console_api.device_setup import DOC_FILES, public_setup
 
 LOGGER = logging.getLogger("console_api")
 
@@ -93,10 +97,12 @@ class ConsoleRuntime:
         mock: bool = False,
         control_transport: ControlTransport | None = None,
         config_dir: Path | None = None,
+        event_push: AdapterPush | Any | None = None,
     ) -> None:
         self.mock = mock
         self.root = find_repo_root()
         self.config = load_stacked_config(config_dir or self.root / "configs")
+        self._injected_push = event_push
         runtime_cfg = self.config.get("runtime", {})
         ports = runtime_cfg.get("ports", {})
         self.heartbeat_seconds = float(runtime_cfg.get("heartbeat_seconds", 2))
@@ -155,6 +161,9 @@ class ConsoleRuntime:
         self.emg = self._empty_plot(["emg_flexor", "emg_extensor", "emg_pronator", "emg_aux"])
         self._last_plot_emit = 0.0
         self._mock_t = 0.0
+        self.emg_calibration = EmgCalibrationStub()
+        self.vision_calibration_complete = False
+        self.eeg_calibration_acknowledged = False
 
     @staticmethod
     def _empty_plot(channels: list[str]) -> dict[str, Any]:
@@ -170,11 +179,14 @@ class ConsoleRuntime:
     def start(self) -> None:
         if self._started:
             return
-        try:
-            self._push = AdapterPush(self.push_endpoint)
-        except Exception:
-            LOGGER.warning("adapter push unavailable", exc_info=True)
-            self._push = None
+        if self._injected_push is not None:
+            self._push = self._injected_push
+        else:
+            try:
+                self._push = AdapterPush(self.push_endpoint)
+            except Exception:
+                LOGGER.warning("adapter push unavailable", exc_info=True)
+                self._push = None
         self._stop.clear()
         self._thread = threading.Thread(target=self._run_bus, name="console-api-bus", daemon=True)
         self._thread.start()
@@ -185,8 +197,10 @@ class ConsoleRuntime:
         if self._thread is not None:
             self._thread.join(timeout=2)
             self._thread = None
-        if self._push is not None:
+        if self._push is not None and self._injected_push is None:
             self._push.close()
+            self._push = None
+        elif self._injected_push is not None:
             self._push = None
         self.control.close()
         self._started = False
@@ -1028,3 +1042,111 @@ class ConsoleRuntime:
 
     def last_control_request(self) -> ControlRequest | None:
         return self.control.last_request
+
+    def setup_status(self) -> dict[str, Any]:
+        return public_setup(self.root, self.config, mock=self.mock)
+
+    def doc_path(self, slug: str) -> Path | None:
+        relative = DOC_FILES.get(slug)
+        if relative is None:
+            return None
+        path = self.root / relative
+        return path if path.is_file() else None
+
+    def run_demo(self, scenario: str) -> dict[str, Any]:
+        spec = load_scenario_spec(self.root, scenario)
+        with self._lock:
+            session_id = self.active_session_id
+            trial_id = self.active_trial_id
+            sequence_start = self._seq + 1
+        prepared = materialize_demo_events(
+            spec,
+            session_id=session_id,
+            trial_id=trial_id,
+            sequence_start=sequence_start,
+        )
+        started = time.monotonic()
+        injected = 0
+        for delay_ms, event in prepared:
+            wait_s = (delay_ms / 1000.0) - (time.monotonic() - started)
+            if wait_s > 0:
+                time.sleep(wait_s)
+            self._inject_unnormalized(event)
+            injected += 1
+        with self._lock:
+            self._seq = sequence_start + injected - 1
+        self._broadcast({"type": "snapshot", "payload": self.snapshot()})
+        return {
+            "ok": True,
+            "scenario": scenario,
+            "events_injected": injected,
+            "pushed": self._push is not None,
+            "mock": self.mock,
+        }
+
+    def _inject_unnormalized(self, event: dict[str, Any]) -> None:
+        outgoing = {k: v for k, v in event.items() if k != "normalized_time_ns"}
+        parse_unnormalized_event(outgoing)
+        pushed = False
+        if self._push is not None:
+            try:
+                self._push.send_event(outgoing)
+                pushed = True
+            except Exception:
+                LOGGER.warning("demo push to hub failed", exc_info=True)
+        if self.mock or not pushed:
+            self.ingest_event(outgoing, from_bus=False)
+
+    def calibrate_emg_status(self) -> dict[str, Any]:
+        return self.emg_calibration.status()
+
+    def calibrate_emg_start(self) -> dict[str, Any]:
+        status = self.emg_calibration.start()
+        self._emit_calibration_instruction(status["instruction"])
+        return status
+
+    def calibrate_emg_next(self) -> dict[str, Any]:
+        status = self.emg_calibration.next_phase()
+        self._emit_calibration_instruction(status["instruction"])
+        return status
+
+    def calibrate_emg_record(self) -> dict[str, Any]:
+        return self.emg_calibration.record()
+
+    def _emit_calibration_instruction(self, instruction: str) -> None:
+        event = self._make_event(
+            EventType.TRIAL_INSTRUCTION,
+            {
+                "instruction": instruction,
+                "notes": "emg_calibration",
+                "ambiguous": False,
+            },
+            session_id=self.active_session_id,
+            trial_id=self.active_trial_id,
+        )
+        self.publish_event(event)
+
+    def complete_vision_calibration(self) -> dict[str, Any]:
+        self.vision_calibration_complete = True
+        return {
+            "ok": True,
+            "protocol": "vision",
+            "complete": True,
+            "camera_index": self.config.get("devices", {}).get("vision", {}).get("camera_index"),
+            "object_ids": [
+                "object_blue_1",
+                "object_red_1",
+                "object_green_1",
+                "object_yellow_1",
+            ],
+        }
+
+    def acknowledge_eeg_calibration(self) -> dict[str, Any]:
+        self.eeg_calibration_acknowledged = True
+        return {
+            "ok": True,
+            "protocol": "eeg",
+            "acknowledged": True,
+            "shadow_only": True,
+            "drives_action": False,
+        }

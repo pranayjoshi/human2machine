@@ -12,6 +12,8 @@ import { useLive } from "@/lib/live";
 
 const LINKS = [
   { href: "/", label: "Preflight" },
+  { href: "/setup", label: "Setup" },
+  { href: "/calibrate", label: "Calibration" },
   { href: "/session", label: "Live session" },
   { href: "/inspect", label: "Intent inspector" },
   { href: "/review", label: "Session review" },
@@ -43,7 +45,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link
               key={link.href}
               href={link.href}
-              aria-current={pathname === link.href ? "page" : undefined}
+              aria-current={
+                pathname === link.href ||
+                (link.href !== "/" && pathname.startsWith(link.href))
+                  ? "page"
+                  : undefined
+              }
             >
               {link.label}
             </Link>

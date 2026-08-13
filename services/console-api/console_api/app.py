@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from intent_contracts.control import SessionStartRequest, TrialStartRequest
 from pydantic import BaseModel, ConfigDict, Field
 
 from console_api.control_plane import ControlTransport
+from console_api.demo import SCENARIOS
 from console_api.runtime import CLIENT_QUEUE_MAX, ConsoleRuntime
 
 
@@ -32,12 +34,21 @@ class ReplayRequest(BaseModel):
     speed: float = Field(default=1.0, gt=0)
 
 
+class DemoRunRequest(BaseModel):
+    scenario: Literal["success", "conflict", "cancel"]
+
+
 def create_app(
     *,
     mock: bool = False,
     control_transport: ControlTransport | None = None,
+    event_push: Any | None = None,
 ) -> FastAPI:
-    runtime = ConsoleRuntime(mock=mock, control_transport=control_transport)
+    runtime = ConsoleRuntime(
+        mock=mock,
+        control_transport=control_transport,
+        event_push=event_push,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -133,6 +144,47 @@ def create_app(
         if not result.get("ok"):
             raise HTTPException(status_code=400, detail=result)
         return result
+
+    @app.get("/api/setup")
+    def setup() -> dict[str, Any]:
+        return runtime.setup_status()
+
+    @app.get("/api/docs/{slug}")
+    def setup_doc(slug: str) -> FileResponse:
+        path = runtime.doc_path(slug)
+        if path is None:
+            raise HTTPException(status_code=404, detail="document not found")
+        return FileResponse(path, media_type="text/markdown; charset=utf-8")
+
+    @app.post("/api/demo/run")
+    def run_demo(body: DemoRunRequest) -> dict[str, Any]:
+        if body.scenario not in SCENARIOS:
+            raise HTTPException(status_code=400, detail="unknown demo scenario")
+        return runtime.run_demo(body.scenario)
+
+    @app.post("/api/calibrate/emg/start")
+    def calibrate_emg_start() -> dict[str, Any]:
+        return runtime.calibrate_emg_start()
+
+    @app.get("/api/calibrate/emg/status")
+    def calibrate_emg_status() -> dict[str, Any]:
+        return runtime.calibrate_emg_status()
+
+    @app.post("/api/calibrate/emg/next")
+    def calibrate_emg_next() -> dict[str, Any]:
+        return runtime.calibrate_emg_next()
+
+    @app.post("/api/calibrate/emg/record")
+    def calibrate_emg_record() -> dict[str, Any]:
+        return runtime.calibrate_emg_record()
+
+    @app.post("/api/calibrate/vision/complete")
+    def calibrate_vision_complete() -> dict[str, Any]:
+        return runtime.complete_vision_calibration()
+
+    @app.post("/api/calibrate/eeg/acknowledge")
+    def calibrate_eeg_acknowledge() -> dict[str, Any]:
+        return runtime.acknowledge_eeg_calibration()
 
     @app.websocket("/api/live")
     async def live(websocket: WebSocket) -> None:

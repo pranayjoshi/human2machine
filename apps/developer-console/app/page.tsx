@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { StatusPill } from "@/components/Status";
 import { api } from "@/lib/api";
@@ -56,6 +57,14 @@ export default function PreflightPage() {
         ))}
       </ul>
       {message ? <p className="error">{message}</p> : null}
+      {result && !result.ready ? (
+        <p className="lede" role="status">
+          Required checks failed. Follow in-app device instructions on{" "}
+          <Link href="/setup">Setup</Link> (Crown, Ganglion, mic, camera, simulator). Edit{" "}
+          <code>.env.local</code> and <code>configs/local.yaml</code> on disk — this
+          browser never stores secrets.
+        </p>
+      ) : null}
       <div className="btn-row">
         <button type="button" className="btn" onClick={() => void refresh()} disabled={busy}>
           Recheck
