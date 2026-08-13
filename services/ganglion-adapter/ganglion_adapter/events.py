@@ -17,6 +17,7 @@ def make_event(
     modality: str | None = "emg",
     source_time_ns: int | None = None,
     quality: float = 1.0,
+    received_monotonic_ns: int | None = None,
 ) -> EventEnvelope:
     return EventEnvelope(
         schema_version=SCHEMA_VERSION,
@@ -28,7 +29,9 @@ def make_event(
         trial_id=None,
         sequence=sequence,
         source_time_ns=source_time_ns,
-        received_monotonic_ns=now_monotonic_ns(),
+        received_monotonic_ns=(
+            received_monotonic_ns if received_monotonic_ns is not None else now_monotonic_ns()
+        ),
         quality=quality,
         producer_version=PRODUCER_VERSION,
         payload=payload,

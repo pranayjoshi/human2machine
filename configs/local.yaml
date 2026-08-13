@@ -21,6 +21,7 @@ devices:
   ganglion:
     enabled: true
     mock: true
+    # Set locally for --hardware. Do not commit machine-specific ports.
     serial_port: null
   audio:
     enabled: true

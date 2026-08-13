@@ -74,23 +74,27 @@ export function deviceStatusEvent(
   status: "healthy" | "degraded" | "offline",
   detail: string | null,
   metadata: Record<string, unknown> = {},
+  deviceAlias = "crown-mock",
 ): UnnormalizedEvent {
+  const payload: Record<string, unknown> = {
+    status,
+    device_alias: deviceAlias,
+    detail,
+    metadata: {
+      stream: "raw",
+      ...metadata,
+    },
+  };
+  if (deviceAlias === "crown-mock") {
+    payload.battery_percent = 92;
+    (payload.metadata as Record<string, unknown>).os_version = "mock";
+  }
   return makeEvent({
     eventType: "device.status",
     modality: "eeg",
     sequence,
     sourceTimeNs: null,
-    payload: {
-      status,
-      device_alias: "crown-mock",
-      detail,
-      battery_percent: 92,
-      metadata: {
-        stream: "raw",
-        os_version: "mock",
-        ...metadata,
-      },
-    },
+    payload,
   });
 }
 

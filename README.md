@@ -30,7 +30,7 @@ just run-mocks
 
 Then open the developer console at `http://127.0.0.1:3000`. The API gateway is `http://127.0.0.1:8000`.
 
-`just run-mocks` starts the complete stack without hardware. `just run-hardware` requires explicit confirmation.
+`just run-mocks` starts the complete stack without hardware. Then either click **Demo: success** on the live session page or run `just demo`. `just run-hardware` requires explicit confirmation and is documented in the device handbook.
 
 ## Operator docs
 

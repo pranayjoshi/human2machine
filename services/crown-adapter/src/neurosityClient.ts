@@ -72,20 +72,14 @@ export class NeurosityCrownClient implements CrownClient {
     if (!this._client) {
       throw new Error("not authenticated");
     }
-    const stream = this._client.brainwaves("raw");
-    for await (const epoch of stream as AsyncIterable<CrownEpoch>) {
-      yield epoch;
-    }
+    yield* asAsyncIterable<CrownEpoch>(this._client.brainwaves("raw"));
   }
 
   async *accelerometer(): AsyncIterable<CrownAccel> {
     if (!this._client) {
       throw new Error("not authenticated");
     }
-    const stream = this._client.accelerometer();
-    for await (const sample of stream as AsyncIterable<CrownAccel>) {
-      yield sample;
-    }
+    yield* asAsyncIterable<CrownAccel>(this._client.accelerometer());
   }
 
   async disconnect(): Promise<void> {
@@ -105,4 +99,100 @@ export function createCrownClient(mock: boolean): CrownClient {
     return new MockCrownClient();
   }
   return new NeurosityCrownClient();
+}
+
+type RxSubscriber = {
+  unsubscribe?: () => void;
+};
+
+/**
+ * Neurosity SDK streams are RxJS Observables. Tests may inject AsyncIterables.
+ */
+export async function* asAsyncIterable<T>(
+  source: unknown,
+  isStopped?: () => boolean,
+): AsyncIterable<T> {
+  if (source != null && typeof (source as AsyncIterable<T>)[Symbol.asyncIterator] === "function") {
+    for await (const item of source as AsyncIterable<T>) {
+      if (isStopped?.()) {
+        return;
+      }
+      yield item;
+    }
+    return;
+  }
+
+  const observable = source as {
+    subscribe: (...args: unknown[]) => RxSubscriber | (() => void);
+  };
+  if (source == null || typeof observable.subscribe !== "function") {
+    throw new Error("stream is not an Observable or AsyncIterable");
+  }
+
+  const queue: T[] = [];
+  let done = false;
+  let failure: unknown;
+  let notify: (() => void) | null = null;
+  const wake = () => {
+    const fn = notify;
+    notify = null;
+    fn?.();
+  };
+
+  const observer = {
+    next(value: T) {
+      queue.push(value);
+      wake();
+    },
+    error(err: unknown) {
+      failure = err;
+      done = true;
+      wake();
+    },
+    complete() {
+      done = true;
+      wake();
+    },
+  };
+
+  let subscription: RxSubscriber | (() => void) | undefined;
+  try {
+    subscription = observable.subscribe(observer);
+  } catch {
+    subscription = observable.subscribe(observer.next, observer.error, observer.complete);
+  }
+
+  const unsubscribe = () => {
+    if (typeof subscription === "function") {
+      subscription();
+    } else {
+      subscription?.unsubscribe?.();
+    }
+  };
+
+  try {
+    while (!done || queue.length > 0) {
+      if (isStopped?.()) {
+        return;
+      }
+      if (queue.length === 0) {
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            notify = resolve;
+          }),
+          new Promise<void>((resolve) => setTimeout(resolve, 100)),
+        ]);
+        continue;
+      }
+      const item = queue.shift();
+      if (item !== undefined) {
+        yield item;
+      }
+    }
+    if (failure !== undefined) {
+      throw failure;
+    }
+  } finally {
+    unsubscribe();
+  }
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 from intent_contracts.envelope import EventEnvelope
@@ -50,24 +51,34 @@ class GanglionMockRuntime:
     confidence_threshold: float = 0.7
     snr_db: float = 12.0
     packet_loss: float = 0.0
+    device_alias: str = "ganglion-mock"
+    capture_mode: str = "usb_dongle_mock"
+    model_id: str = "emg-mock-rms-v0"
+    acquisition: object | None = None
 
     sequence: int = 0
     started_ns: int = 0
     last_data_age_ms: float = 0.0
-    _acq: MockAcquisition = field(init=False)
+    _acq: Any = field(init=False)
     _filters: CausalEmgFilter = field(init=False)
     _windows: WindowBuffer = field(init=False)
     _smoother: LiveSmoother = field(init=False)
     _started: bool = False
 
     def __post_init__(self) -> None:
-        self._acq = MockAcquisition(
-            sample_rate_hz=self.sample_rate_hz,
-            chunk_ms=self.chunk_ms,
-            seed=self.seed,
-            snr_db=self.snr_db,
-            packet_loss=self.packet_loss,
-        )
+        if self.acquisition is None:
+            self._acq = MockAcquisition(
+                sample_rate_hz=self.sample_rate_hz,
+                chunk_ms=self.chunk_ms,
+                seed=self.seed,
+                snr_db=self.snr_db,
+                packet_loss=self.packet_loss,
+            )
+        else:
+            self._acq = self.acquisition
+            rate = getattr(self._acq, "sample_rate_hz", None)
+            if rate:
+                self.sample_rate_hz = float(rate)
         self._filters = CausalEmgFilter(sample_rate_hz=self.sample_rate_hz)
         window_samples = int(round(self.sample_rate_hz * self.window_ms / 1000.0))
         hop_samples = int(round(self.sample_rate_hz * self.hop_ms / 1000.0))
@@ -96,10 +107,12 @@ class GanglionMockRuntime:
                     sequence=self._next_seq(),
                     payload={
                         "status": "healthy",
-                        "device_alias": "ganglion-mock",
-                        "detail": "mock stream started",
+                        "device_alias": self.device_alias,
+                        "detail": "mock stream started"
+                        if "mock" in self.device_alias
+                        else "ganglion stream started",
                         "battery_percent": 100.0,
-                        "metadata": {"mode": "usb_dongle_mock"},
+                        "metadata": {"mode": self.capture_mode},
                     },
                 )
             )
@@ -112,7 +125,7 @@ class GanglionMockRuntime:
                     sequence=self._next_seq(),
                     payload={
                         "status": "offline",
-                        "device_alias": "ganglion-mock",
+                        "device_alias": self.device_alias,
                         "detail": "disconnected",
                         "metadata": {},
                     },
@@ -125,14 +138,17 @@ class GanglionMockRuntime:
         if chunk is None:
             return events
         raw, first_ns, _label = chunk
+        receive_ns = getattr(self._acq, "last_receive_ns", None)
         filtered = self._filters.process(raw)
         quality, components, flags = score_emg_quality(raw, self._acq.packet_loss_count)
+        self.last_data_age_ms = 0.0
         events.append(
             make_event(
                 event_type="biosignal.chunk",
                 sequence=self._next_seq(),
                 source_time_ns=first_ns,
                 quality=quality,
+                received_monotonic_ns=receive_ns,
                 payload={
                     "sample_rate_hz": self.sample_rate_hz,
                     "channel_names": CHANNEL_NAMES,
@@ -176,7 +192,7 @@ class GanglionMockRuntime:
                             key: scores.get(key, 0.0)
                             for key in ("rest", "confirm", "cancel", "unknown")
                         },
-                        "model_id": "emg-mock-rms-v0",
+                        "model_id": self.model_id,
                         "shadow_only": False,
                     },
                 )
@@ -205,7 +221,7 @@ class GanglionMockRuntime:
             sequence=self._next_seq(),
             payload={
                 "status": "offline",
-                "device_alias": "ganglion-mock",
+                "device_alias": self.device_alias,
                 "detail": "adapter stopping",
                 "metadata": {},
             },

@@ -7,6 +7,8 @@ from pathlib import Path
 
 from intent_runtime.config import load_stacked_config
 
+from vision_adapter.camera import LatestFrameCamera, VisionHardwareRuntime, list_cameras
+from vision_adapter.color_detector import DEFAULT_CATALOG
 from vision_adapter.mock import VisionMockRuntime
 from vision_adapter.publisher import BoundedAdapterPush, ListSink
 
@@ -32,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | None = None) -> None:
+def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | None = None) -> int:
     args = build_parser().parse_args(argv)
     mock = not args.hardware
     config = load_stacked_config(find_repo_root() / "configs")
@@ -40,12 +42,18 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
         "adapter_push", "tcp://127.0.0.1:5555"
     )
     vision_cfg = config.get("vision", {})
+    devices_cfg = config.get("devices", {}).get("vision", {})
     if args.list_devices:
-        print("mock-camera" if mock else "hardware camera listing is stubbed")
-        return
-    if not mock:
-        print("hardware camera path is stubbed; use --mock")
-        return
+        if mock:
+            print("mock-camera")
+            return 0
+        found = list_cameras()
+        if not found:
+            print("no OpenCV cameras opened on indices 0-4")
+            return 0
+        for index in found:
+            print(index)
+        return 0
 
     objects = vision_cfg.get("objects") or None
     catalog = None
@@ -65,20 +73,11 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
                     "class_name": item.get("class_name", item["object_id"]),
                     "table_position_xy": pos,
                     "bbox_xyxy": bbox,
+                    "color": item.get("class_name", "").replace("_block", ""),
                 }
             )
 
     publisher = sink or BoundedAdapterPush(endpoint)
-    runtime_kwargs: dict = {
-        "scenario": args.scenario,
-        "pointing_confidence_min": float(vision_cfg.get("pointing_confidence_min", 0.55)),
-        "publish_hz": float(vision_cfg.get("publish_hz", 12)),
-        "freeze": False,
-        "freeze_after_ms": args.freeze_after_ms,
-    }
-    if catalog:
-        runtime_kwargs["objects"] = catalog
-    runtime = VisionMockRuntime(**runtime_kwargs)
     stop = False
 
     def _halt(_signum=None, _frame=None) -> None:
@@ -88,15 +87,48 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
     signal.signal(signal.SIGINT, _halt)
     signal.signal(signal.SIGTERM, _halt)
 
-    started = time.monotonic()
-    last_heartbeat = 0.0
-    period = 1.0 / max(runtime.publish_hz, 1.0)
+    camera: LatestFrameCamera | None = None
     try:
+        if mock:
+            runtime_kwargs: dict = {
+                "scenario": args.scenario,
+                "pointing_confidence_min": float(vision_cfg.get("pointing_confidence_min", 0.55)),
+                "publish_hz": float(vision_cfg.get("publish_hz", 12)),
+                "freeze": False,
+                "freeze_after_ms": args.freeze_after_ms,
+            }
+            if catalog:
+                runtime_kwargs["objects"] = catalog
+            runtime = VisionMockRuntime(**runtime_kwargs)
+        else:
+            camera = LatestFrameCamera(
+                camera_index=int(devices_cfg.get("camera_index", 0)),
+                width=int(devices_cfg.get("width", 1280)),
+                height=int(devices_cfg.get("height", 720)),
+                fps=int(devices_cfg.get("fps", 30)),
+            )
+            try:
+                camera.start()
+            except Exception as exc:
+                publisher.send_event(make_offline(f"failed to open camera: {exc}"))
+                return 1
+            runtime = VisionHardwareRuntime(
+                camera,
+                catalog=catalog or [dict(row) for row in DEFAULT_CATALOG],
+                pointing_confidence_min=float(vision_cfg.get("pointing_confidence_min", 0.55)),
+                publish_hz=float(vision_cfg.get("publish_hz", 12)),
+            )
+
+        started = time.monotonic()
+        last_heartbeat = 0.0
+        period = 1.0 / max(float(vision_cfg.get("publish_hz", 12)), 1.0)
         while not stop:
             now = time.monotonic()
             elapsed_ms = (now - started) * 1000.0
-            if args.freeze and elapsed_ms >= args.freeze_after_ms and not runtime.frozen:
-                runtime.enable_freeze()
+            if mock and args.freeze and elapsed_ms >= args.freeze_after_ms:
+                assert isinstance(runtime, VisionMockRuntime)
+                if not runtime.frozen:
+                    runtime.enable_freeze()
             for event in runtime.render_frame():
                 publisher.send_event(event)
             if now - last_heartbeat >= 2.0:
@@ -106,9 +138,27 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
                 break
             time.sleep(period)
         publisher.send_event(runtime.shutdown())
+        return 0
     finally:
+        if camera is not None:
+            camera.stop()
         publisher.close()
 
 
+def make_offline(detail: str):
+    from vision_adapter.mock import make_event
+
+    return make_event(
+        event_type="device.status",
+        sequence=0,
+        payload={
+            "status": "offline",
+            "device_alias": "vision-camera",
+            "detail": detail,
+            "metadata": {"detector": "hsv_color"},
+        },
+    )
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
