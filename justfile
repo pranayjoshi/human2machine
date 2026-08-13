@@ -17,6 +17,9 @@ preflight:
 run-mocks:
     {{python}} scripts/run_stack.py --mock
 
+demo *args:
+    {{python}} scripts/demo_mvp.py {{args}}
+
 run-hardware:
     {{python}} scripts/run_stack.py --hardware --confirm
 
