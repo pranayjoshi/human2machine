@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "01jfxtest00000000000000002",
+  "event_type": "vision.objects",
+  "source": "vision-adapter",
+  "modality": "vision",
+  "session_id": "session_fixture_1",
+  "trial_id": "trial_fixture_1",
+  "sequence": 12,
+  "source_time_ns": 1010000000,
+  "received_monotonic_ns": 2010000000,
+  "normalized_time_ns": 60000000,
+  "quality": 0.95,
+  "producer_version": "0.1.0",
+  "payload": {
+    "frame_id": 551,
+    "objects": [
+      {
+        "object_id": "object_blue_1",
+        "class_name": "blue_block",
+        "confidence": 0.98,
+        "bbox_xyxy": [120, 90, 220, 210],
+        "table_position_xy": [0.31, 0.54]
+      },
+      {
+        "object_id": "object_red_1",
+        "class_name": "red_block",
+        "confidence": 0.97,
+        "bbox_xyxy": [320, 90, 420, 210],
+        "table_position_xy": [0.62, 0.54]
+      }
+    ],
+    "pointing_candidates": [
+      {"object_id": "object_blue_1", "confidence": 0.82}
+    ],
+    "head_direction_candidates": []
+  }
+}

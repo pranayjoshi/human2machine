@@ -1,0 +1,220 @@
+{
+  "$defs": {
+    "Action": {
+      "enum": [
+        "SELECT_OBJECT",
+        "REQUEST_HANDOFF",
+        "CONFIRM",
+        "CANCEL",
+        "STOP"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "EvidenceItem": {
+      "additionalProperties": true,
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "modality": {
+          "title": "Modality",
+          "type": "string"
+        },
+        "contribution": {
+          "title": "Contribution",
+          "type": "number"
+        },
+        "quality": {
+          "title": "Quality",
+          "type": "number"
+        },
+        "age_ms": {
+          "minimum": 0,
+          "title": "Age Ms",
+          "type": "number"
+        }
+      },
+      "required": [
+        "event_id",
+        "modality",
+        "contribution",
+        "quality",
+        "age_ms"
+      ],
+      "title": "EvidenceItem",
+      "type": "object"
+    },
+    "FusionState": {
+      "enum": [
+        "IDLE",
+        "REQUEST_DETECTED",
+        "TARGET_PROPOSED",
+        "AWAITING_CONFIRMATION",
+        "COMMIT_PROPOSED",
+        "OUTCOME_OBSERVED",
+        "CANCELLED"
+      ],
+      "title": "FusionState",
+      "type": "string"
+    },
+    "IntentAlternative": {
+      "additionalProperties": true,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Action"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action"
+        },
+        "target_object_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Object Id"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "confidence"
+      ],
+      "title": "IntentAlternative",
+      "type": "object"
+    },
+    "IntentStatus": {
+      "enum": [
+        "PROPOSED",
+        "SUPERSEDED",
+        "EXPIRED",
+        "CANCELLED"
+      ],
+      "title": "IntentStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "decision_id": {
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "action": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Action"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Action"
+    },
+    "target_object_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Object Id"
+    },
+    "confidence": {
+      "title": "Confidence",
+      "type": "number"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/IntentStatus"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "default": "PROPOSED",
+      "title": "Status"
+    },
+    "alternatives": {
+      "items": {
+        "$ref": "#/$defs/IntentAlternative"
+      },
+      "title": "Alternatives",
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/EvidenceItem"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "fusion_model_id": {
+      "title": "Fusion Model Id",
+      "type": "string"
+    },
+    "fusion_state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FusionState"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fusion State"
+    },
+    "expires_at_ns": {
+      "title": "Expires At Ns",
+      "type": "integer"
+    },
+    "conflicts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Conflicts",
+      "type": "array"
+    },
+    "reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reason Codes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "decision_id",
+    "action",
+    "confidence",
+    "fusion_model_id",
+    "expires_at_ns"
+  ],
+  "title": "IntentDecisionPayload",
+  "type": "object"
+}

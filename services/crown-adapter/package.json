@@ -1,0 +1,25 @@
+{
+  "name": "@intent/crown-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@intent/contracts": "workspace:*",
+    "@neurosity/sdk": "^7.5.1",
+    "rxjs": "^7.8.1",
+    "zeromq": "^6.3.0",
+    "zod": "^3.24.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "additionalProperties": true,
+  "properties": {
+    "feature_name": {
+      "title": "Feature Name",
+      "type": "string"
+    },
+    "window_start_ns": {
+      "title": "Window Start Ns",
+      "type": "integer"
+    },
+    "window_end_ns": {
+      "title": "Window End Ns",
+      "type": "integer"
+    },
+    "label": {
+      "title": "Label",
+      "type": "string"
+    },
+    "confidence": {
+      "title": "Confidence",
+      "type": "number"
+    },
+    "candidate_scores": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Candidate Scores",
+      "type": "object"
+    },
+    "model_id": {
+      "title": "Model Id",
+      "type": "string"
+    },
+    "shadow_only": {
+      "default": false,
+      "title": "Shadow Only",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "feature_name",
+    "window_start_ns",
+    "window_end_ns",
+    "label",
+    "confidence",
+    "model_id"
+  ],
+  "title": "ModalityFeaturePayload",
+  "type": "object"
+}

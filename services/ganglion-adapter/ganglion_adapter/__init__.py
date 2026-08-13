@@ -1,0 +1,1 @@
+"""OpenBCI Ganglion EMG adapter."""

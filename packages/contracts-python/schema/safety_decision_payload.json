@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "SafetyChecks": {
+      "additionalProperties": true,
+      "properties": {
+        "intent_fresh": {
+          "title": "Intent Fresh",
+          "type": "boolean"
+        },
+        "target_visible": {
+          "title": "Target Visible",
+          "type": "boolean"
+        },
+        "cancel_absent": {
+          "title": "Cancel Absent",
+          "type": "boolean"
+        },
+        "machine_ready": {
+          "title": "Machine Ready",
+          "type": "boolean"
+        },
+        "session_active": {
+          "default": true,
+          "title": "Session Active",
+          "type": "boolean"
+        },
+        "schema_valid": {
+          "default": true,
+          "title": "Schema Valid",
+          "type": "boolean"
+        },
+        "no_unresolved_conflict": {
+          "default": true,
+          "title": "No Unresolved Conflict",
+          "type": "boolean"
+        },
+        "confirmation_satisfied": {
+          "default": true,
+          "title": "Confirmation Satisfied",
+          "type": "boolean"
+        },
+        "physical_robot_disarmed": {
+          "default": true,
+          "title": "Physical Robot Disarmed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "intent_fresh",
+        "target_visible",
+        "cancel_absent",
+        "machine_ready"
+      ],
+      "title": "SafetyChecks",
+      "type": "object"
+    },
+    "SafetyVerdict": {
+      "enum": [
+        "APPROVE",
+        "ASK_CONFIRMATION",
+        "HOLD",
+        "REJECT",
+        "EMERGENCY_STOP"
+      ],
+      "title": "SafetyVerdict",
+      "type": "string"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "decision_id": {
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "verdict": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SafetyVerdict"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Verdict"
+    },
+    "reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reason Codes",
+      "type": "array"
+    },
+    "policy_version": {
+      "title": "Policy Version",
+      "type": "string"
+    },
+    "checks": {
+      "$ref": "#/$defs/SafetyChecks"
+    },
+    "command_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Command Id"
+    },
+    "confirmation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confirmation Id"
+    }
+  },
+  "required": [
+    "decision_id",
+    "verdict",
+    "policy_version",
+    "checks"
+  ],
+  "title": "SafetyDecisionPayload",
+  "type": "object"
+}

@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multimodal-intent-compiler"
+version = "0.1.0"
+description = "Local-first multimodal intent compiler for a tabletop handoff simulator"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "pyyaml>=6.0",
+  "pyzmq>=26.0",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "numpy>=2.0",
+  "scipy>=1.14",
+  "polars>=1.6",
+  "pyarrow>=17.0",
+  "zarr>=2.18",
+  "brainflow>=5.13",
+  "scikit-learn>=1.5",
+  "joblib>=1.4",
+  "opencv-python>=4.10",
+  "sounddevice>=0.5",
+  "structlog>=24.4",
+  "prometheus-client>=0.21",
+  "python-dotenv>=1.0",
+  "websockets>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "hypothesis>=6.112",
+  "ruff>=0.6",
+  "httpx>=0.27",
+]
+vision = [
+  "mediapipe>=0.10",
+]
+audio-mlx = [
+  "mlx-whisper>=0.4; sys_platform == 'darwin'",
+]
+eeg = [
+  "mne>=1.8",
+]
+ml = [
+  "torch>=2.4",
+]
+
+[project.scripts]
+intent-event-hub = "event_hub.main:main"
+intent-fusion = "fusion_runtime.main:main"
+intent-safety = "safety_gateway.main:main"
+intent-simulator = "robot_simulator.main:main"
+intent-recorder = "session_recorder.main:main"
+intent-console-api = "console_api.main:main"
+intent-ganglion = "ganglion_adapter.main:main"
+intent-audio = "audio_adapter.main:main"
+intent-vision = "vision_adapter.main:main"
+
+[tool.setuptools.packages.find]
+where = [
+  "packages/contracts-python/src",
+  "packages/runtime-python/src",
+  "services/event-hub",
+  "services/fusion-runtime",
+  "services/safety-gateway",
+  "services/robot-simulator",
+  "services/session-recorder",
+  "services/console-api",
+  "services/ganglion-adapter",
+  "services/audio-adapter",
+  "services/vision-adapter",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = [
+  "packages/contracts-python/src",
+  "packages/runtime-python/src",
+  "services/event-hub",
+  "services/fusion-runtime",
+  "services/safety-gateway",
+  "services/robot-simulator",
+  "services/session-recorder",
+  "services/console-api",
+  "services/ganglion-adapter",
+  "services/audio-adapter",
+  "services/vision-adapter",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

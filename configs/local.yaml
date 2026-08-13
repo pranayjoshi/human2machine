@@ -1,0 +1,44 @@
+runtime:
+  schema_version: "1.0.0"
+  producer_version: "0.1.0"
+  machine_mode: simulator_only
+  ports:
+    adapter_push: "tcp://127.0.0.1:5555"
+    normalized_pub: "tcp://127.0.0.1:5556"
+    command_push: "tcp://127.0.0.1:5557"
+    control_rep: "tcp://127.0.0.1:5558"
+    console_api: 8000
+    developer_console: 3000
+  heartbeat_seconds: 2
+  max_event_bytes: 262144
+  degraded_missed_heartbeats: 2
+  offline_missed_heartbeats: 5
+
+devices:
+  crown:
+    enabled: true
+    mock: true
+  ganglion:
+    enabled: true
+    mock: true
+    serial_port: null
+  audio:
+    enabled: true
+    mock: true
+    device_name: null
+    sample_rate_hz: 16000
+  vision:
+    enabled: true
+    mock: true
+    camera_index: 0
+    width: 1280
+    height: 720
+    fps: 30
+  simulator:
+    enabled: true
+
+storage:
+  sessions_dir: data/sessions
+  fixtures_dir: data/fixtures
+  record_audio: false
+  record_video: false

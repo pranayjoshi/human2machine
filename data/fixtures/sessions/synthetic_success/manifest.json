@@ -1,0 +1,76 @@
+{
+  "commit": "synthetic",
+  "config_hashes": {
+    "local.yaml": "8e5441b18f1fae318f0dea06a77bbb14eb2d4904fd63e0a3ed25f9bf9fd873c4",
+    "modalities.yaml": "2a4f8cb8c1192d8845553d4ac3f8ef5a04bf3a2dbcacaef57d6029d36e763fa2",
+    "safety.yaml": "efaa298c3b3f31b56fd6b91a51c8127eb03daa09d7ac0bd05df96b9f5e329124",
+    "session.started": "synthetic-config"
+  },
+  "consent": true,
+  "contract_version": "1.0.0",
+  "device_aliases": {
+    "audio": {
+      "enabled": true,
+      "mock": true
+    },
+    "crown": {
+      "enabled": true,
+      "mock": true
+    },
+    "ganglion": {
+      "enabled": true,
+      "mock": true
+    },
+    "simulator": {
+      "enabled": true
+    },
+    "vision": {
+      "enabled": true,
+      "mock": true
+    }
+  },
+  "dirty_tree": false,
+  "duration_ns": 413779000,
+  "encryption": "none",
+  "end_wall_time_ns": 1786658881414261000,
+  "event_counts": {
+    "action.outcome": 1,
+    "audio.intent_candidate": 1,
+    "biosignal.chunk": 1,
+    "intent.decision": 1,
+    "modality.feature": 1,
+    "safety.decision": 1,
+    "session.started": 1,
+    "session.stopped": 1,
+    "trial.completed": 1,
+    "trial.started": 1,
+    "vision.objects": 1
+  },
+  "finalization_status": "finalized",
+  "model_ids": {
+    "emg": "emg-synthetic-v0",
+    "fusion": "late-fusion-v1"
+  },
+  "packet_loss_summary": {
+    "dropped_low_priority_events": 0,
+    "total_packet_loss_count": 0
+  },
+  "producer_version": "0.1.0",
+  "record_audio": false,
+  "record_video": false,
+  "retention": "local",
+  "session_id": "synthetic_success",
+  "start_wall_time_ns": 1786658881000482000,
+  "stream_completeness": {
+    "audio": false,
+    "biosignals": true,
+    "events": true,
+    "issues": [],
+    "video": false
+  },
+  "time_range": {
+    "max_normalized_ns": 220000000,
+    "min_normalized_ns": 0
+  },
+  "user_id": "user_synthetic"
+}

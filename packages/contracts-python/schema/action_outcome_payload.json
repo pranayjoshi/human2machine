@@ -1,0 +1,62 @@
+{
+  "$defs": {
+    "OutcomeKind": {
+      "enum": [
+        "COMPLETED",
+        "CANCELLED",
+        "FAULT",
+        "ESTOPPED",
+        "REJECTED"
+      ],
+      "title": "OutcomeKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "command_id": {
+      "title": "Command Id",
+      "type": "string"
+    },
+    "decision_id": {
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OutcomeKind"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Outcome"
+    },
+    "duration_ms": {
+      "minimum": 0,
+      "title": "Duration Ms",
+      "type": "number"
+    },
+    "user_correction": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "User Correction"
+    }
+  },
+  "required": [
+    "command_id",
+    "decision_id",
+    "outcome",
+    "duration_ms"
+  ],
+  "title": "ActionOutcomePayload",
+  "type": "object"
+}

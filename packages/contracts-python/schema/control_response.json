@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "ControlMethod": {
+      "enum": [
+        "session.start",
+        "session.stop",
+        "trial.start",
+        "trial.complete",
+        "trial.abort"
+      ],
+      "title": "ControlMethod",
+      "type": "string"
+    },
+    "SessionState": {
+      "enum": [
+        "NO_SESSION",
+        "PREFLIGHT",
+        "READY",
+        "RECORDING",
+        "STOPPING",
+        "FINALIZED",
+        "FAILED"
+      ],
+      "title": "SessionState",
+      "type": "string"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "method": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ControlMethod"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Method"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "trial_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trial Id"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SessionState"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "State"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "ok",
+    "request_id",
+    "method",
+    "state"
+  ],
+  "title": "ControlResponse",
+  "type": "object"
+}

@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "Action": {
+      "enum": [
+        "SELECT_OBJECT",
+        "REQUEST_HANDOFF",
+        "CONFIRM",
+        "CANCEL",
+        "STOP"
+      ],
+      "title": "Action",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Only the safety gateway may create this object.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "command_id": {
+      "title": "Command Id",
+      "type": "string"
+    },
+    "decision_id": {
+      "title": "Decision Id",
+      "type": "string"
+    },
+    "action": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Action"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Action"
+    },
+    "target_object_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Object Id"
+    },
+    "issued_at_ns": {
+      "minimum": 0,
+      "title": "Issued At Ns",
+      "type": "integer"
+    },
+    "expires_at_ns": {
+      "minimum": 0,
+      "title": "Expires At Ns",
+      "type": "integer"
+    },
+    "safety_policy_version": {
+      "title": "Safety Policy Version",
+      "type": "string"
+    },
+    "idempotency_key": {
+      "title": "Idempotency Key",
+      "type": "string"
+    }
+  },
+  "required": [
+    "command_id",
+    "decision_id",
+    "action",
+    "issued_at_ns",
+    "expires_at_ns",
+    "safety_policy_version",
+    "idempotency_key"
+  ],
+  "title": "ActionCommand",
+  "type": "object"
+}

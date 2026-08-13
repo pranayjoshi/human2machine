@@ -1,0 +1,334 @@
+[
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn000000000000000000000001",
+    "event_type": "session.started",
+    "source": "event-hub",
+    "modality": null,
+    "session_id": "synthetic_success",
+    "trial_id": null,
+    "sequence": 0,
+    "source_time_ns": 1000000000,
+    "received_monotonic_ns": 2000000000,
+    "normalized_time_ns": 0,
+    "quality": 1.0,
+    "producer_version": "0.1.0",
+    "payload": {
+      "state": "RECORDING",
+      "config_hash": "synthetic-config",
+      "contract_version": "1.0.0",
+      "commit": "synthetic",
+      "model_versions": {
+        "fusion": "late-fusion-v1",
+        "emg": "emg-synthetic-v0"
+      },
+      "user_id": "user_synthetic",
+      "consent": true,
+      "record_audio": false,
+      "record_video": false
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn000000000000000000000002",
+    "event_type": "trial.started",
+    "source": "event-hub",
+    "modality": null,
+    "session_id": "synthetic_success",
+    "trial_id": "trial_synthetic_1",
+    "sequence": 1,
+    "source_time_ns": 1010000000,
+    "received_monotonic_ns": 2010000000,
+    "normalized_time_ns": 10000000,
+    "quality": 1.0,
+    "producer_version": "0.1.0",
+    "payload": {
+      "instruction": "give me the blue block",
+      "ground_truth_action": "REQUEST_HANDOFF",
+      "ground_truth_target": "object_blue_1",
+      "ambiguous": false,
+      "notes": "synthetic fixture"
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn000000000000000000000003",
+    "event_type": "biosignal.chunk",
+    "source": "ganglion-emg",
+    "modality": "emg",
+    "session_id": "synthetic_success",
+    "trial_id": "trial_synthetic_1",
+    "sequence": 2,
+    "source_time_ns": 1020000000,
+    "received_monotonic_ns": 2020000000,
+    "normalized_time_ns": 20000000,
+    "quality": 1.0,
+    "producer_version": "0.1.0",
+    "payload": {
+      "sample_rate_hz": 200.0,
+      "channel_names": [
+        "synth_a",
+        "synth_b"
+      ],
+      "sample_count": 4,
+      "samples": [
+        [
+          0.0,
+          0.25,
+          0.5,
+          0.25
+        ],
+        [
+          0.0,
+          -0.25,
+          0.0,
+          0.25
+        ]
+      ],
+      "units": "microvolts",
+      "filters_applied": [],
+      "packet_loss_count": 0,
+      "clock_confidence": 1.0,
+      "estimated_first_sample_ns": 0
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn000000000000000000000004",
+    "event_type": "audio.intent_candidate",
+    "source": "audio-adapter",
+    "modality": "audio",
+    "session_id": "synthetic_success",
+    "trial_id": "trial_synthetic_1",
+    "sequence": 3,
+    "source_time_ns": 1050000000,
+    "received_monotonic_ns": 2050000000,
+    "normalized_time_ns": 50000000,
+    "quality": 0.94,
+    "producer_version": "0.1.0",
+    "payload": {
+      "transcript": "give me that one",
+      "is_final": true,
+      "action": "REQUEST_HANDOFF",
+      "target_reference": "DEICTIC",
+      "target_object_id": null,
+      "confidence": 0.94,
+      "utterance_start_ns": 10000000,
+      "utterance_end_ns": 45000000,
+      "model_id": "local-asr-v1"
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn000000000000000000000005",
+    "event_type": "vision.objects",
+    "source": "vision-adapter",
+    "modality": "vision",
+    "session_id": "synthetic_success",
+    "trial_id": "trial_synthetic_1",
+    "sequence": 4,
+    "source_time_ns": 1060000000,
+    "received_monotonic_ns": 2060000000,
+    "normalized_time_ns": 60000000,
+    "quality": 0.95,
+    "producer_version": "0.1.0",
+    "payload": {
+      "frame_id": 1,
+      "objects": [
+        {
+          "object_id": "object_blue_1",
+          "class_name": "blue_block",
+          "confidence": 0.98,
+          "bbox_xyxy": [
+            120.0,
+            90.0,
+            220.0,
+            210.0
+          ],
+          "table_position_xy": [
+            0.31,
+            0.54
+          ]
+        }
+      ],
+      "pointing_candidates": [
+        {
+          "object_id": "object_blue_1",
+          "confidence": 0.82
+        }
+      ],
+      "head_direction_candidates": []
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn000000000000000000000006",
+    "event_type": "modality.feature",
+    "source": "ganglion-emg",
+    "modality": "emg",
+    "session_id": "synthetic_success",
+    "trial_id": "trial_synthetic_1",
+    "sequence": 5,
+    "source_time_ns": 1080000000,
+    "received_monotonic_ns": 2080000000,
+    "normalized_time_ns": 80000000,
+    "quality": 0.91,
+    "producer_version": "0.1.0",
+    "payload": {
+      "feature_name": "emg_gesture",
+      "window_start_ns": 55000000,
+      "window_end_ns": 80000000,
+      "label": "confirm",
+      "confidence": 0.91,
+      "candidate_scores": {
+        "rest": 0.04,
+        "confirm": 0.91,
+        "cancel": 0.05
+      },
+      "model_id": "emg-synthetic-v0",
+      "shadow_only": false
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn000000000000000000000007",
+    "event_type": "intent.decision",
+    "source": "fusion-runtime",
+    "modality": "fusion",
+    "session_id": "synthetic_success",
+    "trial_id": "trial_synthetic_1",
+    "sequence": 6,
+    "source_time_ns": 1090000000,
+    "received_monotonic_ns": 2090000000,
+    "normalized_time_ns": 90000000,
+    "quality": 1.0,
+    "producer_version": "0.1.0",
+    "payload": {
+      "decision_id": "decision_synthetic_1",
+      "action": "REQUEST_HANDOFF",
+      "target_object_id": "object_blue_1",
+      "confidence": 0.92,
+      "status": "PROPOSED",
+      "alternatives": [
+        {
+          "target_object_id": "object_red_1",
+          "confidence": 0.06
+        }
+      ],
+      "evidence": [
+        {
+          "event_id": "syn000000000000000000000004",
+          "modality": "audio",
+          "contribution": 0.4,
+          "quality": 0.94,
+          "age_ms": 40
+        }
+      ],
+      "fusion_model_id": "late-fusion-v1",
+      "fusion_state": "COMMIT_PROPOSED",
+      "expires_at_ns": 1590000000,
+      "conflicts": [],
+      "reason_codes": []
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn000000000000000000000008",
+    "event_type": "safety.decision",
+    "source": "safety-gateway",
+    "modality": "safety",
+    "session_id": "synthetic_success",
+    "trial_id": "trial_synthetic_1",
+    "sequence": 7,
+    "source_time_ns": 1095000000,
+    "received_monotonic_ns": 2095000000,
+    "normalized_time_ns": 95000000,
+    "quality": 1.0,
+    "producer_version": "0.1.0",
+    "payload": {
+      "decision_id": "decision_synthetic_1",
+      "verdict": "APPROVE",
+      "reason_codes": [],
+      "policy_version": "safety-policy-v1",
+      "checks": {
+        "intent_fresh": true,
+        "target_visible": true,
+        "cancel_absent": true,
+        "machine_ready": true,
+        "session_active": true,
+        "schema_valid": true,
+        "no_unresolved_conflict": true,
+        "confirmation_satisfied": true,
+        "physical_robot_disarmed": true
+      },
+      "command_id": "command_synthetic_1",
+      "confirmation_id": null
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn000000000000000000000009",
+    "event_type": "action.outcome",
+    "source": "robot-simulator",
+    "modality": "machine",
+    "session_id": "synthetic_success",
+    "trial_id": "trial_synthetic_1",
+    "sequence": 8,
+    "source_time_ns": 1200000000,
+    "received_monotonic_ns": 2200000000,
+    "normalized_time_ns": 200000000,
+    "quality": 1.0,
+    "producer_version": "0.1.0",
+    "payload": {
+      "command_id": "command_synthetic_1",
+      "decision_id": "decision_synthetic_1",
+      "outcome": "COMPLETED",
+      "duration_ms": 100.0,
+      "user_correction": null
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn00000000000000000000000a",
+    "event_type": "trial.completed",
+    "source": "event-hub",
+    "modality": null,
+    "session_id": "synthetic_success",
+    "trial_id": "trial_synthetic_1",
+    "sequence": 9,
+    "source_time_ns": 1210000000,
+    "received_monotonic_ns": 2210000000,
+    "normalized_time_ns": 210000000,
+    "quality": 1.0,
+    "producer_version": "0.1.0",
+    "payload": {
+      "instruction": "give me the blue block",
+      "ground_truth_action": "REQUEST_HANDOFF",
+      "ground_truth_target": "object_blue_1",
+      "ambiguous": false,
+      "outcome": "COMPLETED",
+      "failure_reason": null,
+      "user_correction": null
+    }
+  },
+  {
+    "schema_version": "1.0.0",
+    "event_id": "syn00000000000000000000000b",
+    "event_type": "session.stopped",
+    "source": "event-hub",
+    "modality": null,
+    "session_id": "synthetic_success",
+    "trial_id": null,
+    "sequence": 10,
+    "source_time_ns": 1220000000,
+    "received_monotonic_ns": 2220000000,
+    "normalized_time_ns": 220000000,
+    "quality": 1.0,
+    "producer_version": "0.1.0",
+    "payload": {
+      "state": "STOPPING",
+      "contract_version": "1.0.0",
+      "commit": "synthetic"
+    }
+  }
+]

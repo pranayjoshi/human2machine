@@ -1,0 +1,101 @@
+{
+  "$defs": {
+    "TargetCandidate": {
+      "additionalProperties": true,
+      "properties": {
+        "object_id": {
+          "title": "Object Id",
+          "type": "string"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "object_id",
+        "confidence"
+      ],
+      "title": "TargetCandidate",
+      "type": "object"
+    },
+    "VisionObject": {
+      "additionalProperties": true,
+      "properties": {
+        "object_id": {
+          "title": "Object Id",
+          "type": "string"
+        },
+        "class_name": {
+          "title": "Class Name",
+          "type": "string"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox_xyxy": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Bbox Xyxy",
+          "type": "array"
+        },
+        "table_position_xy": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Table Position Xy",
+          "type": "array"
+        }
+      },
+      "required": [
+        "object_id",
+        "class_name",
+        "confidence",
+        "bbox_xyxy",
+        "table_position_xy"
+      ],
+      "title": "VisionObject",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "frame_id": {
+      "minimum": 0,
+      "title": "Frame Id",
+      "type": "integer"
+    },
+    "objects": {
+      "items": {
+        "$ref": "#/$defs/VisionObject"
+      },
+      "title": "Objects",
+      "type": "array"
+    },
+    "pointing_candidates": {
+      "items": {
+        "$ref": "#/$defs/TargetCandidate"
+      },
+      "title": "Pointing Candidates",
+      "type": "array"
+    },
+    "head_direction_candidates": {
+      "items": {
+        "$ref": "#/$defs/TargetCandidate"
+      },
+      "title": "Head Direction Candidates",
+      "type": "array"
+    }
+  },
+  "required": [
+    "frame_id"
+  ],
+  "title": "VisionObjectsPayload",
+  "type": "object"
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "at_ms": 200,
+    "transcript": "give me that one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null,
+    "confidence": 0.94
+  },
+  {
+    "at_ms": 1800,
+    "transcript": "cancel",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null,
+    "confidence": 0.99
+  },
+  {
+    "at_ms": 3200,
+    "transcript": "give me the blue block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_blue_1",
+    "confidence": 0.96
+  },
+  {
+    "at_ms": 4500,
+    "transcript": "stop",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null,
+    "confidence": 0.99
+  },
+  {
+    "at_ms": 5600,
+    "transcript": "never mind",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null,
+    "confidence": 0.99
+  },
+  {
+    "at_ms": 6800,
+    "transcript": "don't do that",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null,
+    "confidence": 0.99
+  },
+  {
+    "at_ms": 8000,
+    "transcript": "pick the red block",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NAMED",
+    "target_object_id": "object_red_1",
+    "confidence": 0.93
+  },
+  {
+    "at_ms": 9200,
+    "transcript": "give me this",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null,
+    "confidence": 0.9
+  },
+  {
+    "at_ms": 10400,
+    "transcript": "what is the weather",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null,
+    "confidence": 0.4
+  },
+  {
+    "at_ms": 11600,
+    "transcript": "aaaa noise",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null,
+    "confidence": 0.2,
+    "noise": true
+  },
+  {
+    "at_ms": 12800,
+    "transcript": "give me the yellow",
+    "is_final": false,
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_yellow_1",
+    "confidence": 0.5
+  }
+]

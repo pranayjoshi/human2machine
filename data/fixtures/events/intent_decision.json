@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "01jfxtest00000000000000004",
+  "event_type": "intent.decision",
+  "source": "fusion-runtime",
+  "modality": "fusion",
+  "session_id": "session_fixture_1",
+  "trial_id": "trial_fixture_1",
+  "sequence": 3,
+  "source_time_ns": null,
+  "received_monotonic_ns": 2030000000,
+  "normalized_time_ns": 90000000,
+  "quality": 1.0,
+  "producer_version": "0.1.0",
+  "payload": {
+    "decision_id": "decision_fixture_1",
+    "action": "REQUEST_HANDOFF",
+    "target_object_id": "object_blue_1",
+    "confidence": 0.92,
+    "status": "PROPOSED",
+    "alternatives": [
+      {"target_object_id": "object_red_1", "confidence": 0.06}
+    ],
+    "evidence": [
+      {
+        "event_id": "01jfxtest00000000000000001",
+        "modality": "audio",
+        "contribution": 0.4,
+        "quality": 0.94,
+        "age_ms": 40
+      },
+      {
+        "event_id": "01jfxtest00000000000000002",
+        "modality": "vision",
+        "contribution": 0.38,
+        "quality": 0.95,
+        "age_ms": 30
+      },
+      {
+        "event_id": "01jfxtest00000000000000003",
+        "modality": "emg",
+        "contribution": 0.22,
+        "quality": 0.91,
+        "age_ms": 10
+      }
+    ],
+    "fusion_model_id": "late-fusion-v1",
+    "fusion_state": "COMMIT_PROPOSED",
+    "expires_at_ns": 1590000000,
+    "conflicts": [],
+    "reason_codes": []
+  }
+}

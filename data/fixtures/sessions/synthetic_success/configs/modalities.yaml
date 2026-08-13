@@ -1,0 +1,82 @@
+freshness_max_age_ms:
+  audio.intent_candidate: 5000
+  vision.objects: 500
+  modality.feature.emg_gesture: 750
+  modality.feature.eeg_shadow: 1000
+  machine.state: 500
+  service.heartbeat: 5000
+
+fusion:
+  model_id: late-fusion-v1
+  time_constant_ms:
+    audio: 2500
+    vision: 250
+    emg: 400
+    eeg: 800
+  weights:
+    audio_action: 1.0
+    audio_named_target: 0.9
+    vision_pointing: 0.8
+    vision_head_direction: 0.2
+    emg_confirm: 0.85
+    emg_cancel: 1.0
+    eeg_shadow: 0.0
+  minimum_target_margin: 0.20
+  decision_ttl_ms: 1500
+  cancel_latency_ms: 120
+  eeg_shadow_only: true
+
+crown:
+  enabled: true
+  stream: raw
+  shadow_only: true
+  sample_rate_hz: 256
+  channels: 8
+  samples_per_chunk: 16
+  reconnect_max_seconds: 30
+  heartbeat_seconds: 2
+  flatline_window_seconds: 2
+  motion_artifact_threshold: 0.8
+
+ganglion:
+  enabled: true
+  sample_rate_hz: 200
+  channels: 4
+  chunk_ms: 80
+  window_ms: 250
+  hop_ms: 50
+  bandpass_hz: [20, 90]
+  notch_hz: 60
+  dwell_ms: 200
+  hysteresis: 0.12
+  refractory_ms: 400
+  confidence_threshold: 0.7
+
+audio:
+  sample_rate_hz: 16000
+  preroll_ms: 250
+  silence_end_ms: 400
+  max_utterance_ms: 4000
+  model_id: local-asr-v1
+  parser: grammar_v1
+
+vision:
+  publish_hz: 12
+  pointing_confidence_min: 0.55
+  object_stale_ms: 400
+  objects:
+    - object_id: object_blue_1
+      class_name: blue_block
+    - object_id: object_red_1
+      class_name: red_block
+    - object_id: object_green_1
+      class_name: green_block
+    - object_id: object_yellow_1
+      class_name: yellow_block
+
+simulator:
+  approach_ms: 400
+  grasp_ms: 250
+  handoff_ms: 400
+  seed: 7
+  grasp_failure_probability: 0.0

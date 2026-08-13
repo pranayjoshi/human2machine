@@ -1,0 +1,159 @@
+{
+  "$defs": {
+    "MachineState": {
+      "enum": [
+        "DISCONNECTED",
+        "IDLE",
+        "READY",
+        "EXECUTING",
+        "HOLDING",
+        "COMPLETED",
+        "CANCELLED",
+        "FAULT",
+        "ESTOPPED"
+      ],
+      "title": "MachineState",
+      "type": "string"
+    },
+    "VisionObject": {
+      "additionalProperties": true,
+      "properties": {
+        "object_id": {
+          "title": "Object Id",
+          "type": "string"
+        },
+        "class_name": {
+          "title": "Class Name",
+          "type": "string"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "bbox_xyxy": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Bbox Xyxy",
+          "type": "array"
+        },
+        "table_position_xy": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Table Position Xy",
+          "type": "array"
+        }
+      },
+      "required": [
+        "object_id",
+        "class_name",
+        "confidence",
+        "bbox_xyxy",
+        "table_position_xy"
+      ],
+      "title": "VisionObject",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MachineState"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "State"
+    },
+    "previous_state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MachineState"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Previous State"
+    },
+    "active_command_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Command Id"
+    },
+    "held_object_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Held Object Id"
+    },
+    "target_object_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Object Id"
+    },
+    "progress": {
+      "default": 0.0,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Progress",
+      "type": "number"
+    },
+    "objects": {
+      "items": {
+        "$ref": "#/$defs/VisionObject"
+      },
+      "title": "Objects",
+      "type": "array"
+    },
+    "fault_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fault Reason"
+    }
+  },
+  "required": [
+    "state"
+  ],
+  "title": "MachineStatePayload",
+  "type": "object"
+}

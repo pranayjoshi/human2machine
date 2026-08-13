@@ -1,0 +1,56 @@
+{
+  "$defs": {
+    "DeviceHealth": {
+      "enum": [
+        "healthy",
+        "degraded",
+        "offline"
+      ],
+      "title": "DeviceHealth",
+      "type": "string"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "status": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DeviceHealth"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "default": "healthy",
+      "title": "Status"
+    },
+    "uptime_seconds": {
+      "minimum": 0,
+      "title": "Uptime Seconds",
+      "type": "number"
+    },
+    "last_data_age_ms": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Data Age Ms"
+    },
+    "error_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Error Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "uptime_seconds"
+  ],
+  "title": "ServiceHeartbeatPayload",
+  "type": "object"
+}

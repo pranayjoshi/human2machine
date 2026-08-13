@@ -1,0 +1,161 @@
+{
+  "$defs": {
+    "EventType": {
+      "enum": [
+        "biosignal.chunk",
+        "motion.chunk",
+        "modality.feature",
+        "vision.objects",
+        "vision.hands",
+        "vision.head_direction",
+        "audio.intent_candidate",
+        "intent.candidate_set",
+        "intent.decision",
+        "intent.conflict",
+        "intent.timeout",
+        "safety.decision",
+        "machine.state",
+        "action.outcome",
+        "service.heartbeat",
+        "device.status",
+        "data.quality",
+        "session.started",
+        "session.stopped",
+        "session.failed",
+        "trial.started",
+        "trial.instruction",
+        "trial.label",
+        "trial.completed",
+        "trial.aborted"
+      ],
+      "title": "EventType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": true,
+  "description": "Canonical event wrapper. Adapters omit normalized_time_ns; the hub adds it.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "minLength": 8,
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EventType"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Event Type"
+    },
+    "source": {
+      "minLength": 1,
+      "title": "Source",
+      "type": "string"
+    },
+    "modality": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Modality"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "trial_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trial Id"
+    },
+    "sequence": {
+      "minimum": 0,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "source_time_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Time Ns"
+    },
+    "received_monotonic_ns": {
+      "minimum": 0,
+      "title": "Received Monotonic Ns",
+      "type": "integer"
+    },
+    "normalized_time_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Normalized Time Ns"
+    },
+    "quality": {
+      "default": 1.0,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Quality",
+      "type": "number"
+    },
+    "producer_version": {
+      "default": "0.1.0",
+      "title": "Producer Version",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "source",
+    "sequence",
+    "received_monotonic_ns"
+  ],
+  "title": "EventEnvelope",
+  "type": "object"
+}

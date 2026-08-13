@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "01jfxtest00000000000000003",
+  "event_type": "modality.feature",
+  "source": "ganglion-emg",
+  "modality": "emg",
+  "session_id": "session_fixture_1",
+  "trial_id": "trial_fixture_1",
+  "sequence": 40,
+  "source_time_ns": 1020000000,
+  "received_monotonic_ns": 2020000000,
+  "normalized_time_ns": 80000000,
+  "quality": 0.91,
+  "producer_version": "0.1.0",
+  "payload": {
+    "feature_name": "emg_gesture",
+    "window_start_ns": 55000000,
+    "window_end_ns": 80000000,
+    "label": "confirm",
+    "confidence": 0.91,
+    "candidate_scores": {
+      "rest": 0.04,
+      "confirm": 0.91,
+      "cancel": 0.05
+    },
+    "model_id": "emg-primary-user-v3",
+    "shadow_only": false
+  }
+}

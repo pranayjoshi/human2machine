@@ -1,0 +1,9 @@
+{
+  "publish_hz": 12,
+  "objects": [
+    {"object_id": "object_blue_1", "class_name": "blue_block"},
+    {"object_id": "object_red_1", "class_name": "red_block"},
+    {"object_id": "object_green_1", "class_name": "green_block"},
+    {"object_id": "object_yellow_1", "class_name": "yellow_block"}
+  ]
+}

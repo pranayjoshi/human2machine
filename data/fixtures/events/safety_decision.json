@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "01jfxtest00000000000000005",
+  "event_type": "safety.decision",
+  "source": "safety-gateway",
+  "modality": "safety",
+  "session_id": "session_fixture_1",
+  "trial_id": "trial_fixture_1",
+  "sequence": 3,
+  "source_time_ns": null,
+  "received_monotonic_ns": 2035000000,
+  "normalized_time_ns": 95000000,
+  "quality": 1.0,
+  "producer_version": "0.1.0",
+  "payload": {
+    "decision_id": "decision_fixture_1",
+    "verdict": "ASK_CONFIRMATION",
+    "reason_codes": ["TARGET_MARGIN_LOW"],
+    "policy_version": "safety-policy-v1",
+    "checks": {
+      "intent_fresh": true,
+      "target_visible": true,
+      "cancel_absent": true,
+      "machine_ready": true,
+      "session_active": true,
+      "schema_valid": true,
+      "no_unresolved_conflict": true,
+      "confirmation_satisfied": false,
+      "physical_robot_disarmed": true
+    },
+    "command_id": null,
+    "confirmation_id": "confirm_fixture_1"
+  }
+}

@@ -1,0 +1,4 @@
+packages:
+  - packages/contracts-ts
+  - services/crown-adapter
+  - apps/developer-console

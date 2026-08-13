@@ -1,0 +1,77 @@
+{
+  "additionalProperties": true,
+  "properties": {
+    "sample_rate_hz": {
+      "exclusiveMinimum": 0,
+      "title": "Sample Rate Hz",
+      "type": "number"
+    },
+    "channel_names": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Channel Names",
+      "type": "array"
+    },
+    "sample_count": {
+      "exclusiveMinimum": 0,
+      "title": "Sample Count",
+      "type": "integer"
+    },
+    "samples": {
+      "items": {
+        "items": {
+          "type": "number"
+        },
+        "type": "array"
+      },
+      "title": "Samples",
+      "type": "array"
+    },
+    "units": {
+      "default": "microvolts",
+      "title": "Units",
+      "type": "string"
+    },
+    "filters_applied": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Filters Applied",
+      "type": "array"
+    },
+    "packet_loss_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Packet Loss Count",
+      "type": "integer"
+    },
+    "clock_confidence": {
+      "default": 1.0,
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Clock Confidence",
+      "type": "number"
+    },
+    "estimated_first_sample_ns": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estimated First Sample Ns"
+    }
+  },
+  "required": [
+    "sample_rate_hz",
+    "channel_names",
+    "sample_count",
+    "samples"
+  ],
+  "title": "BiosignalChunkPayload",
+  "type": "object"
+}

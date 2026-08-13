@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "ControlMethod": {
+      "enum": [
+        "session.start",
+        "session.stop",
+        "trial.start",
+        "trial.complete",
+        "trial.abort"
+      ],
+      "title": "ControlMethod",
+      "type": "string"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "method": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ControlMethod"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Method"
+    },
+    "request_id": {
+      "title": "Request Id",
+      "type": "string"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "trial_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trial Id"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "method",
+    "request_id"
+  ],
+  "title": "ControlRequest",
+  "type": "object"
+}

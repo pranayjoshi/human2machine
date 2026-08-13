@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "01jfxtest00000000000000007",
+  "event_type": "service.heartbeat",
+  "source": "event-hub",
+  "modality": null,
+  "session_id": "session_fixture_1",
+  "trial_id": null,
+  "sequence": 360,
+  "source_time_ns": null,
+  "received_monotonic_ns": 2100000000,
+  "normalized_time_ns": 120000000,
+  "quality": 1.0,
+  "producer_version": "0.1.0",
+  "payload": {
+    "status": "healthy",
+    "uptime_seconds": 720,
+    "last_data_age_ms": 42,
+    "error_count": 0
+  }
+}

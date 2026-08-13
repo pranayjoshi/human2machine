@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "01jfxtest00000000000000001",
+  "event_type": "audio.intent_candidate",
+  "source": "audio-adapter",
+  "modality": "audio",
+  "session_id": "session_fixture_1",
+  "trial_id": "trial_fixture_1",
+  "sequence": 1,
+  "source_time_ns": 1000000000,
+  "received_monotonic_ns": 2000000000,
+  "normalized_time_ns": 50000000,
+  "quality": 0.94,
+  "producer_version": "0.1.0",
+  "payload": {
+    "transcript": "give me that one",
+    "is_final": true,
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null,
+    "confidence": 0.94,
+    "utterance_start_ns": 10000000,
+    "utterance_end_ns": 45000000,
+    "model_id": "local-asr-v1"
+  }
+}

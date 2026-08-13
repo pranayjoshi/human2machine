@@ -1,0 +1,101 @@
+{
+  "$defs": {
+    "Action": {
+      "enum": [
+        "SELECT_OBJECT",
+        "REQUEST_HANDOFF",
+        "CONFIRM",
+        "CANCEL",
+        "STOP"
+      ],
+      "title": "Action",
+      "type": "string"
+    },
+    "TargetReference": {
+      "enum": [
+        "NAMED",
+        "DEICTIC",
+        "ORDINAL",
+        "NONE"
+      ],
+      "title": "TargetReference",
+      "type": "string"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "transcript": {
+      "title": "Transcript",
+      "type": "string"
+    },
+    "is_final": {
+      "title": "Is Final",
+      "type": "boolean"
+    },
+    "action": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Action"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Action"
+    },
+    "target_reference": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TargetReference"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "default": "NONE",
+      "title": "Target Reference"
+    },
+    "target_object_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Object Id"
+    },
+    "confidence": {
+      "title": "Confidence",
+      "type": "number"
+    },
+    "utterance_start_ns": {
+      "title": "Utterance Start Ns",
+      "type": "integer"
+    },
+    "utterance_end_ns": {
+      "title": "Utterance End Ns",
+      "type": "integer"
+    },
+    "model_id": {
+      "title": "Model Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "transcript",
+    "is_final",
+    "confidence",
+    "utterance_start_ns",
+    "utterance_end_ns",
+    "model_id"
+  ],
+  "title": "AudioIntentPayload",
+  "type": "object"
+}

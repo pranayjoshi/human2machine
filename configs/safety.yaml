@@ -1,0 +1,24 @@
+safety:
+  mode: simulator_only
+  policy_version: safety-policy-v1
+  auto_approve_threshold: 0.92
+  confirmation_threshold: 0.65
+  minimum_target_margin: 0.20
+  require_emg_confirmation_for_deictic: true
+  max_intent_age_ms: 1000
+  max_machine_state_age_ms: 500
+  confirmation_timeout_ms: 4000
+  stop_latch: true
+  physical_robot_requires_arming: true
+  allowed_actions:
+    - SELECT_OBJECT
+    - REQUEST_HANDOFF
+    - CONFIRM
+    - CANCEL
+    - STOP
+  risk_tiers:
+    SELECT_OBJECT: 0
+    REQUEST_HANDOFF: 1
+    CONFIRM: 0
+    CANCEL: 0
+    STOP: 0

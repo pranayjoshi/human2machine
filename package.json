@@ -1,0 +1,15 @@
+{
+  "name": "multimodal-intent-compiler",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "contracts:test": "pnpm --filter @intent/contracts test",
+    "crown:mock": "pnpm --filter @intent/crown-adapter start -- --mock",
+    "console:dev": "pnpm --filter @intent/developer-console dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test"
+  }
+}

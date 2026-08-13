@@ -1,0 +1,15 @@
+{
+  "biosignals/chunks.parquet": "737165da96fdce2d665de9ca70b20487cccf649992c3b8e8bf230f30c6913d37",
+  "configs/local.yaml": "8e5441b18f1fae318f0dea06a77bbb14eb2d4904fd63e0a3ed25f9bf9fd873c4",
+  "configs/modalities.yaml": "2a4f8cb8c1192d8845553d4ac3f8ef5a04bf3a2dbcacaef57d6029d36e763fa2",
+  "configs/safety.yaml": "efaa298c3b3f31b56fd6b91a51c8127eb03daa09d7ac0bd05df96b9f5e329124",
+  "events/decisions.parquet": "bb4e594e80643095803bcf4249e60a194a4755ff047a246a0493184397143c4f",
+  "events/normalized.parquet": "43da9b561e54fa92138936a217bb1b8343b0d7e7422086a2d3fbd8a589a2879d",
+  "events/outcomes.parquet": "9dcbd539825c050dd598535c29efa38fd52c823210509a0342b889017271a996",
+  "events/preview.json": "857985604b7c5bdb7eebf9fe4c5c6c080fb99f84d9e9bcd5a027baba5cea1722",
+  "events/safety.parquet": "af31385dd1cf4ffbf23ca8602f7c73e7c12d03794254ed0b495dfb7f32939d7a",
+  "labels/trials.parquet": "9cd7087efd4fa67a90f4d630a7399737071fe0ef6937b34586e7407b5c565e49",
+  "manifest.json": "94e5ab82261bd5999e28155c8368ab9dc3ed6435f6084806e97b133d14ccd4a9",
+  "media/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "models/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
