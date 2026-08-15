@@ -5,40 +5,79 @@ from dataclasses import dataclass
 
 from intent_contracts.enums import Action, TargetReference
 
+# STOP and CANCEL are matched before every other intent.
 STOP_PHRASES = (
-    "stop",
-    "halt",
     "emergency stop",
     "full stop",
+    "stop",
+    "halt",
+    "freeze",
 )
 CANCEL_PHRASES = (
-    "cancel",
     "never mind",
     "nevermind",
     "don't do that",
     "dont do that",
     "do not do that",
+    "scratch that",
+    "forget it",
+    "no thanks",
+    "undo that",
+    "cancel",
     "abort",
+    "nope",
 )
 HANDOFF_PHRASES = (
     "give me",
     "hand me",
     "pass me",
     "bring me",
-    "fetch",
+    "get me",
     "can i have",
+    "let me have",
+    "i would like",
+    "i'd like",
     "i want",
+    "i need",
     "hand off",
     "handoff",
+    "hand over",
+    "give it",
+    "pass it",
+    "fetch",
+    "bring",
+    "grab",
+    "give",
+    "pass",
+    "get",
 )
 SELECT_PHRASES = (
-    "select",
-    "pick",
-    "choose",
     "point to",
     "point at",
+    "select",
+    "choose",
+    "pick",
+    "take",
+    "highlight",
 )
-CONFIRM_PHRASES = ("confirm", "yes", "okay", "ok", "do it")
+CONFIRM_PHRASES = (
+    "that's right",
+    "thats right",
+    "sounds good",
+    "go ahead",
+    "go for it",
+    "yes please",
+    "affirmative",
+    "confirm",
+    "proceed",
+    "do it",
+    "okay",
+    "yeah",
+    "yep",
+    "yes",
+    "sure",
+    "ok",
+)
 COLOR_TO_OBJECT = {
     "blue": "object_blue_1",
     "red": "object_red_1",
@@ -51,7 +90,7 @@ ORDINAL_PATTERNS = (
     (re.compile(r"\b(third|3rd)\b"), "third"),
     (re.compile(r"\b(fourth|4th)\b"), "fourth"),
 )
-DEICTIC_RE = re.compile(r"\b(that one|this one|that|this)\b")
+DEICTIC_RE = re.compile(r"\b(that one|this one|those|these|that|this)\b")
 
 
 @dataclass(frozen=True)
@@ -71,9 +110,14 @@ def normalize_transcript(text: str) -> str:
 
 
 def _contains_phrase(text: str, phrase: str) -> bool:
-    if " " in phrase or "'" in phrase:
-        return phrase in text
-    return bool(re.search(rf"\b{re.escape(phrase)}\b", text))
+    return bool(re.search(rf"(?<![a-z0-9']){re.escape(phrase)}(?![a-z0-9'])", text))
+
+
+def _first_phrase(text: str, phrases: tuple[str, ...]) -> str | None:
+    for phrase in phrases:
+        if _contains_phrase(text, phrase):
+            return phrase
+    return None
 
 
 def parse_utterance(transcript: str, *, asr_confidence: float | None = None) -> ParseResult:
@@ -81,20 +125,20 @@ def parse_utterance(transcript: str, *, asr_confidence: float | None = None) -> 
     if not text:
         return _finished("UNKNOWN", TargetReference.NONE, None, 0.1, asr_confidence)
 
-    if any(_contains_phrase(text, phrase) for phrase in STOP_PHRASES):
+    if _first_phrase(text, STOP_PHRASES):
         return _finished(Action.STOP, TargetReference.NONE, None, 0.99, asr_confidence)
-    if any(_contains_phrase(text, phrase) for phrase in CANCEL_PHRASES):
+    if _first_phrase(text, CANCEL_PHRASES):
         return _finished(Action.CANCEL, TargetReference.NONE, None, 0.99, asr_confidence)
 
     action: str | None = None
     grammar = 0.4
-    if any(_contains_phrase(text, phrase) for phrase in HANDOFF_PHRASES):
+    if _first_phrase(text, HANDOFF_PHRASES):
         action = Action.REQUEST_HANDOFF
         grammar = 0.9
-    elif any(_contains_phrase(text, phrase) for phrase in SELECT_PHRASES):
+    elif _first_phrase(text, SELECT_PHRASES):
         action = Action.SELECT_OBJECT
         grammar = 0.9
-    elif any(_contains_phrase(text, phrase) for phrase in CONFIRM_PHRASES):
+    elif _first_phrase(text, CONFIRM_PHRASES):
         action = Action.CONFIRM
         grammar = 0.85
 
