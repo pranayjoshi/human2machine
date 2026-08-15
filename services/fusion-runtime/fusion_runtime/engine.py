@@ -125,6 +125,7 @@ class FusionConfig:
     decision_ttl_ms: int = 1500
     cancel_latency_ms: int = 120
     eeg_shadow_only: bool = True
+    emg_shadow_only: bool = True
     freshness_max_age_ms: Mapping[str, int] = field(
         default_factory=lambda: dict(_DEFAULT_FRESHNESS)
     )
@@ -146,6 +147,7 @@ class FusionConfig:
             decision_ttl_ms=int(fusion.get("decision_ttl_ms", 1500)),
             cancel_latency_ms=int(fusion.get("cancel_latency_ms", 120)),
             eeg_shadow_only=bool(fusion.get("eeg_shadow_only", True)),
+            emg_shadow_only=bool(fusion.get("emg_shadow_only", ganglion.get("shadow_only", True))),
             freshness_max_age_ms=_mapping(freshness, _DEFAULT_FRESHNESS),
             pointing_confidence_min=float(vision.get("pointing_confidence_min", 0.55)),
             gesture_confidence_min=float(ganglion.get("confidence_threshold", 0.7)),
@@ -470,6 +472,8 @@ def _emg_events(
         if str(event.payload.get("feature_name") or "") != "emg_gesture":
             continue
         if _modality_of(event, "emg") != "emg":
+            continue
+        if config.emg_shadow_only or bool(event.payload.get("shadow_only")):
             continue
         out.append(event)
     return out

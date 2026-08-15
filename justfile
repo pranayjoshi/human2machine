@@ -20,6 +20,9 @@ run-mocks:
 demo *args:
     {{python}} scripts/demo_mvp.py {{args}}
 
+soak-biosignals *args:
+    {{python}} scripts/soak_biosignals.py {{args}}
+
 run-hardware:
     {{python}} scripts/run_stack.py --hardware --confirm
 

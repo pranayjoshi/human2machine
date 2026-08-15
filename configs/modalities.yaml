@@ -25,6 +25,7 @@ fusion:
   decision_ttl_ms: 1500
   cancel_latency_ms: 120
   eeg_shadow_only: true
+  emg_shadow_only: true
 
 crown:
   enabled: true
@@ -40,6 +41,7 @@ crown:
 
 ganglion:
   enabled: true
+  shadow_only: true
   sample_rate_hz: 200
   channels: 4
   chunk_ms: 80

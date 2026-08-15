@@ -159,6 +159,22 @@ export class CrownMockGenerator {
     return event;
   }
 
+  /** Emit degraded/offline, then start a new live sample origin (not a continuous replay). */
+  simulateDisconnect(): UnnormalizedEvent[] {
+    const events: UnnormalizedEvent[] = [
+      deviceStatusEvent(this.sequence, "degraded", "mock disconnect"),
+    ];
+    this.sequence += 1;
+    events.push(deviceStatusEvent(this.sequence, "offline", "mock stream interrupted"));
+    this.sequence += 1;
+    this.sampleIndex = 0;
+    this.chunksEmitted = 0;
+    this.sequence += 1;
+    events.push(deviceStatusEvent(this.sequence, "healthy", "mock stream resumed"));
+    this.sequence += 1;
+    return events;
+  }
+
   private shadowFeature(sourceTimeNs: number, quality: number, magnitude: number): UnnormalizedEvent {
     const artifact = magnitude > this.motionArtifactThreshold;
     const event = makeEvent({

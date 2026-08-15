@@ -66,6 +66,7 @@ PLOT_HISTORY = 150
 CLIENT_QUEUE_MAX = 128
 TIMELINE_MAX = 40
 MIN_FREE_GB = 1.0
+SEQUENCE_ANOMALY_FLAGS = frozenset({"sequence_gap", "sequence_regression", "timestamp_gap"})
 
 
 def find_repo_root() -> Path:
@@ -159,6 +160,12 @@ class ConsoleRuntime:
         self.timeline: deque[dict[str, Any]] = deque(maxlen=TIMELINE_MAX)
         self.eeg = self._empty_plot(["C3", "C4", "Cz", "F3", "F4", "P3", "P4", "Oz"])
         self.emg = self._empty_plot(["emg_flexor", "emg_extensor", "emg_pronator", "emg_aux"])
+        crown_cfg = self.config.get("crown", {})
+        ganglion_cfg = self.config.get("ganglion", {})
+        self.biosignals: dict[str, dict[str, Any]] = {
+            "eeg": self._empty_biosignal_health(crown_cfg.get("sample_rate_hz", 256)),
+            "emg": self._empty_biosignal_health(ganglion_cfg.get("sample_rate_hz", 200)),
+        }
         self._last_plot_emit = 0.0
         self._mock_t = 0.0
         self.emg_calibration = EmgCalibrationStub()
@@ -171,6 +178,19 @@ class ConsoleRuntime:
             "channel_names": channels,
             "samples": {name: deque(maxlen=PLOT_HISTORY) for name in channels},
             "t_ms": deque(maxlen=PLOT_HISTORY),
+        }
+
+    @staticmethod
+    def _empty_biosignal_health(sample_rate_hz: float | None) -> dict[str, Any]:
+        return {
+            "quality": None,
+            "packet_loss_count": 0,
+            "last_data_age_ms": None,
+            "sequence_gaps": 0,
+            "last_sequence": None,
+            "shadow_only": True,
+            "sample_rate_hz": sample_rate_hz,
+            "last_chunk_mono": None,
         }
 
     def attach_loop(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -277,6 +297,12 @@ class ConsoleRuntime:
                 sample = abs(math.sin(self._mock_t * 4.0 + index)) * 40.0
                 self.emg["samples"][name].append(sample)
             self.emg["t_ms"].append(t_ms)
+            for key in ("eeg", "emg"):
+                health = self.biosignals[key]
+                if health.get("quality") is None:
+                    health["quality"] = 0.95
+                health["last_chunk_mono"] = now
+                health["last_data_age_ms"] = 0.0
 
     def _emit_plots(self) -> None:
         self._broadcast({"type": "plot", "payload": self._plot_payload("eeg", self.eeg)})
@@ -344,6 +370,9 @@ class ConsoleRuntime:
             return
         if event_type == EventType.BIOSIGNAL_CHUNK:
             self._apply_biosignal(raw, payload)
+            return
+        if event_type == EventType.DATA_QUALITY:
+            self._apply_data_quality(raw, payload)
             return
         if event_type == EventType.VISION_OBJECTS:
             self.vision = payload
@@ -442,6 +471,9 @@ class ConsoleRuntime:
         service["last_data_age_ms"] = payload.get("last_data_age_ms")
         reported = str(payload.get("status") or DeviceHealth.HEALTHY)
         service["reported_status"] = reported
+        stream = self._biosignal_stream_key(source, None, None)
+        if stream is not None and payload.get("last_data_age_ms") is not None:
+            self.biosignals[stream]["last_data_age_ms"] = payload.get("last_data_age_ms")
 
     def _apply_device_status(self, source: str, payload: dict[str, Any], *, from_bus: bool) -> None:
         alias = str(payload.get("device_alias", ""))
@@ -454,15 +486,60 @@ class ConsoleRuntime:
         service["detail"] = payload.get("detail")
         service["reported_status"] = str(payload.get("status") or DeviceHealth.HEALTHY)
 
+    def _biosignal_stream_key(
+        self,
+        source: Any,
+        modality: Any,
+        producer: Any = None,
+    ) -> str | None:
+        blob = f"{source or ''} {modality or ''} {producer or ''}".lower()
+        if any(token in blob for token in ("eeg", "crown", "neurosity")):
+            return "eeg"
+        if any(token in blob for token in ("emg", "ganglion")):
+            return "emg"
+        for candidate in (source, producer):
+            if not candidate:
+                continue
+            service_id = resolve_service_id(str(candidate))
+            if service_id == "crown-adapter":
+                return "eeg"
+            if service_id == "ganglion-adapter":
+                return "emg"
+        return None
+
     def _apply_biosignal(self, raw: dict[str, Any], payload: dict[str, Any]) -> None:
         modality = str(raw.get("modality") or "")
         source = str(raw.get("source") or "")
         names = payload.get("channel_names") or []
         samples = payload.get("samples") or []
+        stream = self._biosignal_stream_key(source, modality)
+        if stream is not None:
+            health = self.biosignals[stream]
+            if raw.get("quality") is not None:
+                try:
+                    health["quality"] = float(raw["quality"])
+                except (TypeError, ValueError):
+                    pass
+            if payload.get("packet_loss_count") is not None:
+                try:
+                    health["packet_loss_count"] = int(payload["packet_loss_count"])
+                except (TypeError, ValueError):
+                    pass
+            if payload.get("sample_rate_hz") is not None:
+                try:
+                    health["sample_rate_hz"] = float(payload["sample_rate_hz"])
+                except (TypeError, ValueError):
+                    pass
+            if raw.get("sequence") is not None:
+                try:
+                    health["last_sequence"] = int(raw["sequence"])
+                except (TypeError, ValueError):
+                    pass
+            health["last_chunk_mono"] = time.monotonic()
         target = None
-        if modality == "eeg" or "crown" in source:
+        if stream == "eeg" or modality == "eeg" or "crown" in source:
             target = self.eeg
-        elif modality == "emg" or "ganglion" in source:
+        elif stream == "emg" or modality == "emg" or "ganglion" in source:
             target = self.emg
         if target is None or not samples:
             return
@@ -486,6 +563,31 @@ class ConsoleRuntime:
                 value = float(sum(reduced) / max(1, len(reduced)))
             target["samples"].setdefault(name, deque(maxlen=PLOT_HISTORY)).append(value)
         target["t_ms"].append(t_ms)
+
+    def _apply_data_quality(self, raw: dict[str, Any], payload: dict[str, Any]) -> None:
+        source = str(raw.get("source") or "")
+        producer = payload.get("producer")
+        stream = self._biosignal_stream_key(source, raw.get("modality"), producer)
+        if stream is None:
+            return
+        health = self.biosignals[stream]
+        score = payload.get("score")
+        if score is not None:
+            try:
+                health["quality"] = float(score)
+            except (TypeError, ValueError):
+                pass
+        flags = payload.get("flags") or []
+        if isinstance(flags, list):
+            named = {str(flag) for flag in flags}
+            if SEQUENCE_ANOMALY_FLAGS.intersection(named):
+                health["sequence_gaps"] = int(health.get("sequence_gaps") or 0) + 1
+        seq = payload.get("sequence")
+        if seq is not None:
+            try:
+                health["last_sequence"] = int(seq)
+            except (TypeError, ValueError):
+                pass
 
     def _push_timeline(self, kind: str, label: str, payload: dict[str, Any]) -> None:
         self.timeline.appendleft(
@@ -636,6 +738,7 @@ class ConsoleRuntime:
             "fusion": {
                 "model_id": fusion.get("model_id"),
                 "eeg_shadow_only": fusion.get("eeg_shadow_only", True),
+                "emg_shadow_only": fusion.get("emg_shadow_only", True),
             },
             "storage": {
                 "record_audio": storage.get("record_audio", False),
@@ -732,8 +835,28 @@ class ConsoleRuntime:
                 "timeline": list(self.timeline),
                 "eeg": self._plot_snapshot(self.eeg),
                 "emg": self._plot_snapshot(self.emg),
+                "biosignals": {
+                    "eeg": self._biosignal_snapshot("eeg"),
+                    "emg": self._biosignal_snapshot("emg"),
+                },
                 "server_time_ms": int(time.time() * 1000),
             }
+
+    def _biosignal_snapshot(self, stream: str) -> dict[str, Any]:
+        health = self.biosignals[stream]
+        last_chunk = health.get("last_chunk_mono")
+        age = health.get("last_data_age_ms")
+        if last_chunk is not None:
+            age = (time.monotonic() - last_chunk) * 1000.0
+        return {
+            "quality": health.get("quality"),
+            "packet_loss_count": int(health.get("packet_loss_count") or 0),
+            "last_data_age_ms": None if age is None else round(float(age), 1),
+            "sequence_gaps": int(health.get("sequence_gaps") or 0),
+            "last_sequence": health.get("last_sequence"),
+            "shadow_only": True,
+            "sample_rate_hz": health.get("sample_rate_hz"),
+        }
 
     @staticmethod
     def _plot_snapshot(plot: dict[str, Any]) -> dict[str, Any]:

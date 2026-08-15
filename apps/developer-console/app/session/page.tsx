@@ -8,7 +8,7 @@ import { Sparkline } from "@/components/Sparkline";
 import { StatusPill } from "@/components/Status";
 import { api } from "@/lib/api";
 import { useBusyAction, useLive } from "@/lib/live";
-import type { DemoScenario, VisionState } from "@/lib/types";
+import type { BiosignalHealth, DemoScenario, PlotSnapshot, VisionState } from "@/lib/types";
 
 function CameraView({ vision }: { vision: VisionState | null }) {
   const objects = vision?.objects ?? [];
@@ -50,6 +50,84 @@ function CameraView({ vision }: { vision: VisionState | null }) {
           .join(", ") || "none"}
       </p>
     </section>
+  );
+}
+
+function formatAge(ageMs: number | null | undefined): string {
+  if (ageMs == null) return "—";
+  if (ageMs < 1000) return `${Math.round(ageMs)} ms`;
+  return `${(ageMs / 1000).toFixed(1)} s`;
+}
+
+function formatQuality(quality: number | null | undefined): string {
+  if (quality == null) return "—";
+  return quality.toFixed(2);
+}
+
+function biosignalTone(health: BiosignalHealth | undefined): { status: string; label: string } {
+  if (!health) {
+    return { status: "offline", label: "No biosignal health yet" };
+  }
+  const age = health.last_data_age_ms;
+  if (age != null && age > 5000) {
+    return { status: "offline", label: "No recent data" };
+  }
+  if (health.packet_loss_count > 0 || health.sequence_gaps > 0) {
+    return { status: "degraded", label: "Packet loss or sequence gaps" };
+  }
+  if (health.quality == null) {
+    return { status: "offline", label: "Waiting for samples" };
+  }
+  if (health.quality >= 0.8) {
+    return { status: "healthy", label: "Quality good" };
+  }
+  if (health.quality >= 0.4) {
+    return { status: "degraded", label: "Quality degraded" };
+  }
+  return { status: "degraded", label: "Quality poor" };
+}
+
+function BiosignalStream({
+  title,
+  shadowNote,
+  health,
+  plot,
+  sparkLabel,
+}: {
+  title: string;
+  shadowNote: string;
+  health: BiosignalHealth | undefined;
+  plot: PlotSnapshot;
+  sparkLabel: string;
+}) {
+  const tone = biosignalTone(health);
+  return (
+    <article>
+      <h3>{title}</h3>
+      <p className="muted">{shadowNote}</p>
+      <p>
+        <StatusPill status={tone.status} label={tone.label} />
+      </p>
+      <dl className="kv">
+        <div>
+          <dt>Quality</dt>
+          <dd>{formatQuality(health?.quality)}</dd>
+        </div>
+        <div>
+          <dt>Packet loss count</dt>
+          <dd>{health?.packet_loss_count ?? "—"}</dd>
+        </div>
+        <div>
+          <dt>Sequence gaps</dt>
+          <dd>{health?.sequence_gaps ?? "—"}</dd>
+        </div>
+        <div>
+          <dt>Last data age</dt>
+          <dd>{formatAge(health?.last_data_age_ms)}</dd>
+        </div>
+      </dl>
+      <Sparkline plot={plot} label={sparkLabel} />
+    </article>
   );
 }
 
@@ -157,13 +235,28 @@ export default function SessionPage() {
           {message ? <p className="error">{message}</p> : null}
         </section>
         <div className="live-bottom">
-          <section className="panel">
-            <h3>EEG (shadow, downsampled)</h3>
-            <Sparkline plot={plots.eeg} label="Crown EEG placeholder" />
-          </section>
-          <section className="panel">
-            <h3>EMG (downsampled)</h3>
-            <Sparkline plot={plots.emg} label="Ganglion EMG placeholder" />
+          <section className="panel biosignal-panel" aria-labelledby="biosignal-heading">
+            <h2 id="biosignal-heading">Biosignal acquisition</h2>
+            <p className="muted">
+              EEG and EMG are recorded for quality and later experiments. They do not drive actions
+              in Milestone 1.
+            </p>
+            <div className="biosignal-grid">
+              <BiosignalStream
+                title="Crown EEG"
+                shadowNote="Shadow-only — does not drive action"
+                health={snapshot?.biosignals?.eeg}
+                plot={plots.eeg}
+                sparkLabel="Crown EEG (downsampled, shadow-only)"
+              />
+              <BiosignalStream
+                title="Ganglion EMG"
+                shadowNote="Shadow-only for Milestone 1 — does not drive action"
+                health={snapshot?.biosignals?.emg}
+                plot={plots.emg}
+                sparkLabel="Ganglion EMG (downsampled, shadow-only)"
+              />
+            </div>
           </section>
           <section className="panel">
             <h3>Audio status</h3>

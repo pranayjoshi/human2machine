@@ -3,6 +3,7 @@ import type {
   DemoRunResult,
   DemoScenario,
   EmgCalibrationStatus,
+  LiveState,
   PreflightResult,
   PublicConfig,
   SessionRecord,
@@ -45,6 +46,7 @@ export const api = {
   health: () => apiGet<{ status: string; mock: boolean }>("/api/health"),
   services: () => apiGet<{ services: unknown[] }>("/api/services"),
   config: () => apiGet<PublicConfig>("/api/config/public"),
+  snapshot: () => apiGet<LiveState>("/api/snapshot"),
   preflight: () => apiPost<PreflightResult>("/api/preflight"),
   startSession: (body: {
     user_id?: string;
