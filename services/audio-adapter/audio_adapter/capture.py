@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,6 +21,19 @@ SILENCE_END_MS = 400
 MAX_UTTERANCE_MS = 4000
 FRAME_MS = 20
 ENERGY_THRESHOLD = 0.02
+PENDING_BLOCK_LIMIT = 300
+
+RAW_AUDIO_KEYS = frozenset(
+    {
+        "pcm",
+        "samples",
+        "waveform",
+        "raw_audio",
+        "audio_pcm",
+        "audio_samples",
+        "audio_bytes",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -26,6 +41,14 @@ class CompletedUtterance:
     samples: NDArray[np.floating]
     start_ns: int
     end_ns: int
+
+
+@dataclass(frozen=True)
+class AsrResult:
+    """Local ASR output. confidence is None unless the backend supplies it."""
+
+    transcript: str
+    confidence: float | None = None
 
 
 class RingBuffer:
@@ -225,14 +248,51 @@ def segment_utterances(
     return out
 
 
-def resolve_asr() -> Callable[[NDArray[np.floating], int], str] | None:
+def extract_asr_confidence(result: Any) -> float | None:
+    """Use backend confidence only when it is explicitly provided.
+
+    Whisper/MLX results expose avg_logprob, not token confidence. Do not convert
+    that into a fabricated high score such as 0.99.
+    """
+    if result is None:
+        return None
+    if isinstance(result, bool):
+        return None
+    if isinstance(result, (int, float)):
+        value = float(result)
+        return value if 0.0 <= value <= 1.0 else None
+    if not isinstance(result, dict):
+        return None
+    for key in ("token_confidence", "avg_token_confidence", "confidence"):
+        if key not in result:
+            continue
+        raw = result[key]
+        if raw is None or isinstance(raw, bool):
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if 0.0 <= value <= 1.0:
+            return value
+    return None
+
+
+def _asr_from_whisper_result(result: dict[str, Any]) -> AsrResult:
+    text = str(result.get("text", "")).strip()
+    return AsrResult(transcript=text, confidence=extract_asr_confidence(result))
+
+
+def resolve_asr() -> Callable[[NDArray[np.floating], int], AsrResult] | None:
     try:
         import mlx_whisper
 
-        def _mlx(audio: NDArray[np.floating], sample_rate_hz: int) -> str:
+        def _mlx(audio: NDArray[np.floating], sample_rate_hz: int) -> AsrResult:
             _ = sample_rate_hz
             result = mlx_whisper.transcribe(np.asarray(audio, dtype=np.float32), language="en")
-            return str(result.get("text", "")).strip()
+            if not isinstance(result, dict):
+                return AsrResult(transcript=str(result).strip(), confidence=None)
+            return _asr_from_whisper_result(result)
 
         return _mlx
     except Exception:
@@ -242,12 +302,14 @@ def resolve_asr() -> Callable[[NDArray[np.floating], int], str] | None:
 
         model = whisper.load_model("tiny.en")
 
-        def _whisper(audio: NDArray[np.floating], sample_rate_hz: int) -> str:
+        def _whisper(audio: NDArray[np.floating], sample_rate_hz: int) -> AsrResult:
             _ = sample_rate_hz
             result = model.transcribe(
                 np.asarray(audio, dtype=np.float32), language="en", fp16=False
             )
-            return str(result.get("text", "")).strip()
+            if not isinstance(result, dict):
+                return AsrResult(transcript=str(result).strip(), confidence=None)
+            return _asr_from_whisper_result(result)
 
         return _whisper
     except Exception:
@@ -270,6 +332,42 @@ def list_sound_devices() -> list[str]:
     return rows
 
 
+def event_contains_raw_audio(event: EventEnvelope | dict[str, Any]) -> bool:
+    payload = event.payload if isinstance(event, EventEnvelope) else event.get("payload", event)
+    return _payload_has_raw_audio(payload)
+
+
+def _payload_has_raw_audio(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            lowered = str(key).lower()
+            if lowered in RAW_AUDIO_KEYS or lowered == "audio":
+                if isinstance(nested, (list, tuple, bytes, bytearray, np.ndarray)):
+                    return True
+                if isinstance(nested, str) and len(nested) > 256:
+                    return True
+            if _payload_has_raw_audio(nested):
+                return True
+        return False
+    if isinstance(value, (list, tuple)):
+        return any(_payload_has_raw_audio(item) for item in value)
+    return False
+
+
+def strip_raw_audio_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Drop raw PCM fields so events never carry microphone samples."""
+    cleaned: dict[str, Any] = {}
+    for key, value in payload.items():
+        lowered = str(key).lower()
+        if lowered in RAW_AUDIO_KEYS or lowered == "audio":
+            continue
+        if isinstance(value, dict):
+            cleaned[key] = strip_raw_audio_payload(value)
+        else:
+            cleaned[key] = value
+    return cleaned
+
+
 class AudioHardwareRuntime:
     def __init__(
         self,
@@ -277,18 +375,21 @@ class AudioHardwareRuntime:
         sample_rate_hz: int = SAMPLE_RATE_HZ,
         device_name: str | int | None = None,
         phrase: str | None = None,
-        asr: Callable[[NDArray[np.floating], int], str] | None = None,
+        asr: Callable[[NDArray[np.floating], int], Any] | None = None,
         resolve_backend: bool = True,
         model_id: str = "grammar_v1",
         preroll_ms: int = PREROLL_MS,
         silence_end_ms: int = SILENCE_END_MS,
         max_utterance_ms: int = MAX_UTTERANCE_MS,
         stream_factory: Callable[..., Any] | None = None,
+        research_recording: bool = False,
+        use_webrtc: bool = True,
     ) -> None:
         self.sample_rate_hz = sample_rate_hz
         self.device_name = device_name
         self.phrase = phrase
         self.model_id = model_id
+        self.research_recording = bool(research_recording)
         self.sequence = 0
         self.ring = RingBuffer(sample_rate_hz=sample_rate_hz)
         self.vad = EnergyVadSegmenter(
@@ -296,15 +397,24 @@ class AudioHardwareRuntime:
             preroll_ms=preroll_ms,
             silence_end_ms=silence_end_ms,
             max_utterance_ms=max_utterance_ms,
+            use_webrtc=use_webrtc,
         )
         self.asr = resolve_asr() if resolve_backend else asr
         self._stream_factory = stream_factory
         self._stream: Any | None = None
         self._started = False
+        self._capture_live = False
         self._phrase_emitted = False
         self._asr_notice_sent = False
         self.dropped_blocks = 0
         self._pending_blocks: deque[tuple[NDArray[np.floating], int]] = deque()
+        self._pending_limit = PENDING_BLOCK_LIMIT
+        self._pending_lock = threading.Lock()
+        self._state_lock = threading.Lock()
+        self._stream_failed = False
+        self._disconnect_detail = "microphone disconnected"
+        self._disconnect_emitted = False
+        self.session_pcm: list[CompletedUtterance] = []
 
     def start(self) -> None:
         factory = self._stream_factory
@@ -323,8 +433,12 @@ class AudioHardwareRuntime:
         start = getattr(self._stream, "start", None)
         if start is not None:
             start()
+        self._capture_live = True
+        self._stream_failed = False
+        self._disconnect_emitted = False
 
     def stop(self) -> None:
+        self._capture_live = False
         stream = self._stream
         self._stream = None
         if stream is None:
@@ -339,20 +453,33 @@ class AudioHardwareRuntime:
 
     def poll(self) -> list[EventEnvelope]:
         events: list[EventEnvelope] = []
-        if not self._started:
-            if self.asr is None and not self.phrase:
-                events.append(self._device_status("degraded", "asr_unavailable"))
-            else:
-                events.append(self._device_status("healthy", "microphone capture started"))
-            self._started = True
-        events.extend(self.drain_capture())
-        if self.asr is None and self.phrase and not self._phrase_emitted:
-            events.extend(
-                self.events_for_transcript(
-                    self.phrase, is_final=True, start_ns=0, end_ns=350_000_000
+        try:
+            self._observe_stream()
+            if not self._started:
+                if self._stream_failed:
+                    events.append(self._device_status("degraded", self._disconnect_detail))
+                    self._disconnect_emitted = True
+                elif self.asr is None and not self.phrase:
+                    events.append(self._device_status("degraded", "asr_unavailable"))
+                else:
+                    events.append(self._device_status("healthy", "microphone capture started"))
+                self._started = True
+            elif self._stream_failed and not self._disconnect_emitted:
+                events.append(self._device_status("degraded", self._disconnect_detail))
+                self._disconnect_emitted = True
+            events.extend(self.drain_capture())
+            if self.asr is None and self.phrase and not self._phrase_emitted:
+                events.extend(
+                    self.events_for_transcript(
+                        self.phrase, is_final=True, start_ns=0, end_ns=350_000_000
+                    )
                 )
-            )
-            self._phrase_emitted = True
+                self._phrase_emitted = True
+        except Exception as exc:
+            self._mark_disconnected(str(exc) or "capture poll failure")
+            if not self._disconnect_emitted:
+                events.append(self._device_status("degraded", self._disconnect_detail))
+                self._disconnect_emitted = True
         return events
 
     def ingest_block(self, samples: NDArray[np.floating], received_ns: int) -> list[EventEnvelope]:
@@ -398,22 +525,18 @@ class AudioHardwareRuntime:
             )
         )
         events.append(
-            make_event(
-                event_type="data.quality",
-                sequence=self._next_seq(),
-                source_time_ns=end_ns,
-                quality=quality,
-                payload={
-                    "score": quality,
-                    "components": {"asr": quality, "grammar": parsed.grammar_match},
-                    "flags": ["overflow"] if self.ring.overflows else [],
-                },
-            )
+            self._quality_event(quality=quality, grammar=parsed.grammar_match, end_ns=end_ns)
         )
         return events
 
     def heartbeat(self, uptime_seconds: float, dropped: int) -> EventEnvelope:
-        status = "degraded" if dropped or (self.asr is None and not self.phrase) else "healthy"
+        degraded = (
+            bool(dropped)
+            or (self.asr is None and not self.phrase)
+            or self._stream_failed
+            or self.ring.overflows > 0
+        )
+        status = "degraded" if degraded else "healthy"
         return runtime_heartbeat(
             SOURCE,
             uptime_seconds=uptime_seconds,
@@ -427,51 +550,129 @@ class AudioHardwareRuntime:
         return self._device_status("offline", "adapter stopping")
 
     def _events_for_utterance(self, utterance: CompletedUtterance) -> list[EventEnvelope]:
-        if self.asr is not None:
-            try:
-                transcript = self.asr(utterance.samples, self.sample_rate_hz)
-            except Exception:
-                transcript = ""
-            if transcript:
-                return self.events_for_transcript(
-                    transcript,
-                    is_final=True,
-                    start_ns=utterance.start_ns,
-                    end_ns=utterance.end_ns,
-                )
-            return []
-        if self.phrase:
-            if self._phrase_emitted:
-                return []
-            self._phrase_emitted = True
-            return self.events_for_transcript(
-                self.phrase,
-                is_final=True,
-                start_ns=utterance.start_ns,
-                end_ns=utterance.end_ns,
-            )
-        if not self._asr_notice_sent:
-            self._asr_notice_sent = True
-            return [self._device_status("degraded", "asr_unavailable")]
-        return []
+        events: list[EventEnvelope] = []
+        try:
+            if self.asr is not None:
+                try:
+                    result = self._run_asr(utterance.samples, self.sample_rate_hz)
+                except Exception:
+                    result = AsrResult(transcript="", confidence=None)
+                if result.transcript:
+                    events = self.events_for_transcript(
+                        result.transcript,
+                        is_final=True,
+                        start_ns=utterance.start_ns,
+                        end_ns=utterance.end_ns,
+                        asr_confidence=result.confidence,
+                    )
+            elif self.phrase:
+                if not self._phrase_emitted:
+                    self._phrase_emitted = True
+                    events = self.events_for_transcript(
+                        self.phrase,
+                        is_final=True,
+                        start_ns=utterance.start_ns,
+                        end_ns=utterance.end_ns,
+                    )
+            elif not self._asr_notice_sent:
+                self._asr_notice_sent = True
+                events = [self._device_status("degraded", "asr_unavailable")]
+        finally:
+            if self.research_recording and utterance.samples.size:
+                self.session_pcm.append(utterance)
+        return events
+
+    def _run_asr(self, samples: NDArray[np.floating], sample_rate_hz: int) -> AsrResult:
+        raw = self.asr(samples, sample_rate_hz) if self.asr is not None else ""
+        if isinstance(raw, AsrResult):
+            return AsrResult(transcript=raw.transcript.strip(), confidence=raw.confidence)
+        if isinstance(raw, dict):
+            return _asr_from_whisper_result(raw)
+        if isinstance(raw, tuple) and len(raw) == 2:
+            text, conf = raw
+            return AsrResult(transcript=str(text).strip(), confidence=extract_asr_confidence(conf))
+        return AsrResult(transcript=str(raw).strip(), confidence=None)
 
     def _on_audio(self, indata, frames, time_info, status) -> None:  # noqa: ANN001
-        import time
-
-        received_ns = time.monotonic_ns()
-        if status:
-            self.dropped_blocks += 1
-        mono = np.asarray(indata, dtype=np.float32)
-        if mono.ndim > 1:
-            mono = mono[:, 0]
-        self._pending_blocks.append((mono.copy(), received_ns))
+        """Queue PCM only. ASR and parse run later in drain_capture/poll."""
+        _ = frames, time_info
+        try:
+            if status:
+                self.dropped_blocks += 1
+            if indata is None:
+                self._mark_disconnected("microphone stream ended")
+                return
+            received_ns = time.monotonic_ns()
+            mono = np.asarray(indata, dtype=np.float32)
+            if mono.ndim > 1:
+                mono = mono[:, 0]
+            block = (mono.copy(), received_ns)
+            with self._pending_lock:
+                if len(self._pending_blocks) >= self._pending_limit:
+                    self._pending_blocks.popleft()
+                    self.dropped_blocks += 1
+                    self.ring.overflows += 1
+                self._pending_blocks.append(block)
+        except Exception as exc:
+            self._mark_disconnected(str(exc) or "microphone stream failure")
 
     def drain_capture(self) -> list[EventEnvelope]:
         events: list[EventEnvelope] = []
-        while self._pending_blocks:
-            samples, received_ns = self._pending_blocks.popleft()
+        overflows_before = self.ring.overflows
+        while True:
+            with self._pending_lock:
+                if not self._pending_blocks:
+                    break
+                samples, received_ns = self._pending_blocks.popleft()
             events.extend(self.ingest_block(samples, received_ns))
+        if self.ring.overflows > overflows_before and not any(
+            event.event_type == "data.quality" for event in events
+        ):
+            events.append(
+                self._quality_event(
+                    quality=0.4,
+                    grammar=0.0,
+                    end_ns=self.ring.last_receive_ns or 0,
+                )
+            )
         return events
+
+    def _observe_stream(self) -> None:
+        if not self._capture_live:
+            return
+        stream = self._stream
+        if stream is None:
+            self._mark_disconnected("microphone disconnected")
+            return
+        try:
+            active = getattr(stream, "active", True)
+            if callable(active):
+                active = active()
+        except Exception as exc:
+            self._mark_disconnected(str(exc) or "microphone stream failure")
+            return
+        if not active:
+            self._mark_disconnected("microphone disconnected")
+
+    def _mark_disconnected(self, detail: str) -> None:
+        with self._state_lock:
+            self._stream_failed = True
+            if detail:
+                self._disconnect_detail = detail
+
+    def _quality_event(self, *, quality: float, grammar: float, end_ns: int) -> EventEnvelope:
+        flags = ["overflow"] if self.ring.overflows else []
+        return make_event(
+            event_type="data.quality",
+            sequence=self._next_seq(),
+            source_time_ns=end_ns,
+            quality=quality,
+            payload={
+                "score": quality,
+                "components": {"asr": quality, "grammar": grammar},
+                "flags": flags,
+            },
+        )
 
     def _intent_event(
         self, transcript, parsed, is_final, start_ns, end_ns, quality
@@ -503,7 +704,10 @@ class AudioHardwareRuntime:
                 "status": status,
                 "device_alias": "audio-mic",
                 "detail": detail,
-                "metadata": {"capture": "sounddevice"},
+                "metadata": {
+                    "capture": "sounddevice",
+                    "research_recording": self.research_recording,
+                },
             },
         )
 
