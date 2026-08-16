@@ -5,6 +5,17 @@ from typing import Any
 import zmq
 from intent_contracts.envelope import EventEnvelope
 
+from audio_adapter.capture import strip_raw_audio_payload
+
+
+def _outgoing_event(event: EventEnvelope | dict[str, Any]) -> dict[str, Any]:
+    payload = event.to_unnormalized_dict() if isinstance(event, EventEnvelope) else dict(event)
+    payload.pop("normalized_time_ns", None)
+    inner = payload.get("payload")
+    if isinstance(inner, dict):
+        payload["payload"] = strip_raw_audio_payload(inner)
+    return payload
+
 
 class BoundedAdapterPush:
     def __init__(self, endpoint: str = "tcp://127.0.0.1:5555", high_water_mark: int = 256) -> None:
@@ -17,8 +28,7 @@ class BoundedAdapterPush:
         self._sock.connect(endpoint)
 
     def send_event(self, event: EventEnvelope | dict[str, Any]) -> bool:
-        payload = event.to_unnormalized_dict() if isinstance(event, EventEnvelope) else dict(event)
-        payload.pop("normalized_time_ns", None)
+        payload = _outgoing_event(event)
         try:
             self._sock.send_json(payload, flags=zmq.DONTWAIT)
             return True
@@ -39,9 +49,7 @@ class ListSink:
         self.dropped_count = 0
 
     def send_event(self, event: EventEnvelope | dict[str, Any]) -> bool:
-        payload = event.to_unnormalized_dict() if isinstance(event, EventEnvelope) else dict(event)
-        payload.pop("normalized_time_ns", None)
-        self.events.append(payload)
+        self.events.append(_outgoing_event(event))
         return True
 
     def close(self) -> None:

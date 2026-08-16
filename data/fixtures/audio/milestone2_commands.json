@@ -1,0 +1,747 @@
+[
+  {
+    "category": "named_target",
+    "transcript": "give me the blue block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_blue_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "hand me the red block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_red_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "pass me the green block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_green_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "bring me the yellow block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_yellow_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "fetch the blue block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_blue_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "can i have the red block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_red_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "i want the green block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_green_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "pick the yellow block",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NAMED",
+    "target_object_id": "object_yellow_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "select the blue block",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NAMED",
+    "target_object_id": "object_blue_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "choose the red block",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NAMED",
+    "target_object_id": "object_red_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "point to the green block",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NAMED",
+    "target_object_id": "object_green_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "point at the yellow block",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NAMED",
+    "target_object_id": "object_yellow_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "give me the blue one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_blue_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "hand me the red one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_red_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "get me the yellow block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_yellow_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "please give me the blue block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_blue_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "i'd like the red block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_red_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "pass the green block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_green_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "bring the yellow cube",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_yellow_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "fetch me the blue cube",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_blue_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "can you give me the red block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_red_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "i need the green block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_green_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "pick up the yellow block",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NAMED",
+    "target_object_id": "object_yellow_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "select the blue cube",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NAMED",
+    "target_object_id": "object_blue_1"
+  },
+  {
+    "category": "named_target",
+    "transcript": "i would like the red block",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NAMED",
+    "target_object_id": "object_red_1"
+  },
+  {
+    "category": "deictic",
+    "transcript": "give me that one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "give me this",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "give me that",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "hand me that one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "pick that one",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "select this",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "choose that",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "pass me this one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "bring me that",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "fetch that one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "can i have that",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "i want this one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "point to that",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "point at this",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "get me this",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "pick this one",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "select that one",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "hand me this",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "pass that one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "i want that",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "take that one",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "take this",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "can you get that one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "bring me this one",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "deictic",
+    "transcript": "choose this one",
+    "action": "SELECT_OBJECT",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "confirm",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "yes",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "okay",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "ok",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "do it",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "yes please",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "go ahead",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "that's right",
+    "action": "CONFIRM",
+    "target_reference": "DEICTIC",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "proceed",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "yep",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "yeah",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "affirmative",
+    "action": "CONFIRM",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "select",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "pick it",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "choose it",
+    "action": "SELECT_OBJECT",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "hand off",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "handoff",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "give it to me",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "pass it",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "confirm_select_handoff",
+    "transcript": "fetch it",
+    "action": "REQUEST_HANDOFF",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "stop",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "STOP!",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "please stop",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "Stop that",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "emergency stop",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "halt",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "full stop",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "stop now",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "stop immediately",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "stop giving me the red one",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "stop it",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "stop",
+    "transcript": "freeze",
+    "action": "STOP",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "cancel",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "Cancel it",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "never mind",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "nevermind",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "don't do that",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "dont do that",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "do not do that",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "never mind the blue block",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "abort",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "cancel that",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "forget it",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "cancel",
+    "transcript": "scratch that",
+    "action": "CANCEL",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "what is the weather",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "play some music",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "hello robot",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "aaaa noise",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null,
+    "noise": true
+  },
+  {
+    "category": "unknown",
+    "transcript": "how's it going",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "turn on the lights",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "what time is it",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "sing a song",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "tell me a joke",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "open the door",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null
+  },
+  {
+    "category": "unknown",
+    "transcript": "umm hmm",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null,
+    "noise": true
+  },
+  {
+    "category": "unknown",
+    "transcript": "la la la",
+    "action": "UNKNOWN",
+    "target_reference": "NONE",
+    "target_object_id": null,
+    "noise": true
+  }
+]

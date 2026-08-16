@@ -13,6 +13,9 @@ SAFETY_PHRASES = [
     ("please stop", "STOP"),
     ("Stop that", "STOP"),
     ("emergency stop", "STOP"),
+    ("halt", "STOP"),
+    ("freeze", "STOP"),
+    ("full stop", "STOP"),
     ("cancel", "CANCEL"),
     ("Cancel it", "CANCEL"),
     ("never mind", "CANCEL"),
@@ -22,6 +25,9 @@ SAFETY_PHRASES = [
     ("do not do that", "CANCEL"),
     ("never mind the blue block", "CANCEL"),
     ("stop giving me the red one", "STOP"),
+    ("forget it", "CANCEL"),
+    ("scratch that", "CANCEL"),
+    ("abort", "CANCEL"),
 ]
 
 UNSUPPORTED = [
@@ -29,6 +35,9 @@ UNSUPPORTED = [
     "play some music",
     "hello robot",
     "aaaa noise",
+    "how's it going",
+    "tell me a joke",
+    "open the door",
 ]
 
 
@@ -58,12 +67,25 @@ def test_named_and_deictic_targets() -> None:
     assert named.action == "REQUEST_HANDOFF"
     assert named.target_reference == "NAMED"
     assert named.target_object_id == "object_blue_1"
+    like = parse_utterance("i'd like the red block")
+    assert like.action == "REQUEST_HANDOFF"
+    assert like.target_object_id == "object_red_1"
     deictic = parse_utterance("give me that one")
     assert deictic.action == "REQUEST_HANDOFF"
     assert deictic.target_reference == "DEICTIC"
+    this_one = parse_utterance("give me this")
+    assert this_one.target_reference == "DEICTIC"
     select = parse_utterance("pick the green block")
     assert select.action == "SELECT_OBJECT"
     assert select.target_object_id == "object_green_1"
+    take = parse_utterance("take that one")
+    assert take.action == "SELECT_OBJECT"
+    assert take.target_reference == "DEICTIC"
+
+
+def test_confirm_variants() -> None:
+    for transcript in ("confirm", "yes", "okay", "go ahead", "that's right"):
+        assert parse_utterance(transcript).action == "CONFIRM", transcript
 
 
 def test_partials_are_never_final() -> None:

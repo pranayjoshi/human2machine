@@ -23,6 +23,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Operator transcript fallback when ASR is unavailable",
     )
+    parser.add_argument(
+        "--research-recording",
+        action="store_true",
+        default=False,
+        help="Keep utterance PCM in memory for this session (opt-in; never streamed)",
+    )
     return parser
 
 
@@ -76,6 +82,7 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
                 preroll_ms=int(audio_cfg.get("preroll_ms", 250)),
                 silence_end_ms=int(audio_cfg.get("silence_end_ms", 400)),
                 max_utterance_ms=int(audio_cfg.get("max_utterance_ms", 4000)),
+                research_recording=bool(args.research_recording),
             )
             try:
                 hardware.start()
@@ -99,7 +106,13 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
                     publisher.send_event(event)
             else:
                 assert isinstance(runtime, AudioHardwareRuntime)
-                for event in runtime.poll():
+                try:
+                    polled = runtime.poll()
+                except Exception as exc:
+                    polled = [
+                        runtime._device_status("degraded", f"microphone stream failure: {exc}")
+                    ]
+                for event in polled:
                     publisher.send_event(event)
             if now - last_heartbeat >= 2.0:
                 publisher.send_event(runtime.heartbeat(now - started, publisher.dropped_count))
