@@ -9,6 +9,7 @@ from intent_contracts.envelope import EventEnvelope, now_monotonic_ns
 from intent_runtime.heartbeat import heartbeat_event as runtime_heartbeat
 from numpy.typing import NDArray
 
+from vision_adapter.calibration import CalibrationMismatchError, CameraCalibration
 from vision_adapter.color_detector import (
     DEFAULT_CATALOG,
     detect_colored_objects,
@@ -16,6 +17,7 @@ from vision_adapter.color_detector import (
     try_mediapipe_pointing,
 )
 from vision_adapter.mock import FreezeDetector, make_event
+from vision_adapter.tracker import DEFAULT_OBJECT_STALE_MS, ObjectTracker, stale_ms_from_config
 
 SOURCE = "vision-adapter"
 
@@ -124,6 +126,26 @@ def list_cameras(max_index: int = 5) -> list[int]:
     return found
 
 
+def _apply_table_plane(
+    objects: list[dict[str, Any]],
+    calibration: CameraCalibration,
+) -> list[dict[str, Any]]:
+    if not calibration.homography:
+        return objects
+    homography = np.array(calibration.homography, dtype=float)
+    updated: list[dict[str, Any]] = []
+    for obj in objects:
+        item = dict(obj)
+        bbox = item.get("bbox_xyxy") or [0.0, 0.0, 0.0, 0.0]
+        cx = (float(bbox[0]) + float(bbox[2])) / 2.0
+        cy = (float(bbox[1]) + float(bbox[3])) / 2.0
+        vec = homography @ np.array([cx, cy, 1.0], dtype=float)
+        denom = float(vec[2]) if abs(float(vec[2])) > 1e-9 else 1.0
+        item["table_position_xy"] = [float(vec[0] / denom), float(vec[1] / denom)]
+        updated.append(item)
+    return updated
+
+
 class VisionHardwareRuntime:
     def __init__(
         self,
@@ -133,6 +155,9 @@ class VisionHardwareRuntime:
         pointing_confidence_min: float = 0.55,
         publish_hz: float = 12.0,
         hands: Any | None = ...,
+        object_stale_ms: float | None = None,
+        calibration: CameraCalibration | None = None,
+        config: dict[str, Any] | None = None,
     ) -> None:
         self.camera = camera
         self.catalog = catalog or [dict(row) for row in DEFAULT_CATALOG]
@@ -144,6 +169,16 @@ class VisionHardwareRuntime:
         self._detector = FreezeDetector()
         self._last_frozen = False
         self._hands = maybe_create_hands() if hands is ... else hands
+        stale_ms = (
+            DEFAULT_OBJECT_STALE_MS
+            if object_stale_ms is None
+            else float(object_stale_ms)
+        )
+        if object_stale_ms is None and config is not None:
+            stale_ms = stale_ms_from_config(config)
+        self.object_stale_ms = stale_ms
+        self.calibration = calibration
+        self._tracker = ObjectTracker(stale_ms=stale_ms)
 
     def render_frame(self, monotonic_ns: int | None = None) -> list[EventEnvelope]:
         latest = self.camera.latest()
@@ -157,7 +192,23 @@ class VisionHardwareRuntime:
         frame, source_time_ns, _received_ns = latest
         frozen = self._detector.observe(source_time_ns, mono)
         self._last_frozen = frozen
+        if self.calibration is not None:
+            height, width = frame.shape[:2]
+            if int(self.calibration.width) != int(width) or int(self.calibration.height) != int(
+                height
+            ):
+                raise CalibrationMismatchError(
+                    "calibration mismatch: stored "
+                    f"camera_id={self.calibration.camera_id!r} "
+                    f"{self.calibration.width}x{self.calibration.height}, "
+                    f"frame {width}x{height}. "
+                    "Refuse to load at a different resolution without an explicit transform."
+                )
         objects = detect_colored_objects(frame, self.catalog)
+        if self.calibration is not None:
+            objects = _apply_table_plane(objects, self.calibration)
+        objects = self._tracker.update(objects, source_time_ns)
+        visible = [item for item in objects if not item.get("stale")]
         pointing: list[dict[str, Any]] = []
         hands_payload = {
             "handedness": None,
@@ -167,10 +218,12 @@ class VisionHardwareRuntime:
         }
         if self._hands is not None:
             pointing, hands_payload = try_mediapipe_pointing(
-                frame, objects, self.pointing_confidence_min, self._hands
+                frame, visible, self.pointing_confidence_min, self._hands
             )
         quality = 0.35 if frozen else 0.96
         flags = ["camera_frozen"] if frozen else []
+        if any(item.get("stale") for item in objects):
+            flags.append("object_stale")
         if not self._started:
             status = "degraded" if frozen else "healthy"
             events.append(self._device_status(status, "camera capture started"))
@@ -234,6 +287,10 @@ class VisionHardwareRuntime:
                         "camera_fps": 0.0 if frozen else self.publish_hz,
                         "hand_landmark_confidence": float(
                             hands_payload.get("landmark_confidence") or 0.0
+                        ),
+                        "calibration_available": 1.0 if self.calibration is not None else 0.0,
+                        "stale_object_count": float(
+                            sum(1 for item in objects if item.get("stale"))
                         ),
                     },
                     "flags": flags,

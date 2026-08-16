@@ -1,0 +1,14 @@
+{
+  "camera_id": "vision-camera-0",
+  "width": 1280,
+  "height": 720,
+  "homography": null,
+  "workspace_polygon": [
+    [0.05, 0.05],
+    [0.95, 0.05],
+    [0.95, 0.95],
+    [0.05, 0.95]
+  ],
+  "marker_size_m": 0.04,
+  "lens_intrinsics": null
+}
