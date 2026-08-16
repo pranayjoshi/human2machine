@@ -42,8 +42,8 @@ Then open the developer console at `http://127.0.0.1:3000`. The API gateway is `
 | Milestone | Status |
 |---|---|
 | 0 Synthetic closed loop | Done — `pytest tests/end_to_end` and `just run-mocks` |
-| 1 Biosignal acquisition | Hardware paths present; 20-minute soak is a manual gate |
-| 2 Audio + vision | Hardware paths present; accuracy gates are manual |
+| 1 Biosignal acquisition | Done in mock/CI (`pytest tests/end_to_end/test_milestone1_soak.py`); hardware 20-minute soak is `just soak-biosignals` plus real devices documented. |
+| 2 Audio + vision | CI gates pass (`pytest tests/end_to_end/test_milestone2_*.py`); hardware accuracy remains operator-run |
 | 3 EMG personalization | Calibration UI + live smoothing; promote models after held-out metrics |
 | 4 Closed-loop demo | Mock demo trial in the console; 100-trial eval is operator-run |
 | 5 EEG shadow experiment | Acquisition + quality only; live fusion weight is 0 |

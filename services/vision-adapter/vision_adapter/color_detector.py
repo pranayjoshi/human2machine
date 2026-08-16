@@ -5,6 +5,14 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from vision_adapter.pointing import (
+    INDEX_MCP,
+    INDEX_TIP,
+    maybe_create_hands,
+    pointing_from_index_ray,
+    try_mediapipe_pointing,
+)
+
 try:
     import cv2
 except Exception:  # pragma: no cover - optional in some CI images
@@ -38,8 +46,19 @@ ARUCO_ID_TO_OBJECT = {
     3: "object_yellow_1",
 }
 
-INDEX_MCP = 5
-INDEX_TIP = 8
+__all__ = [
+    "ARUCO_ID_TO_OBJECT",
+    "COLOR_FROM_CLASS",
+    "DEFAULT_CATALOG",
+    "HSV_RANGES",
+    "INDEX_MCP",
+    "INDEX_TIP",
+    "detect_aruco_objects",
+    "detect_colored_objects",
+    "maybe_create_hands",
+    "pointing_from_index_ray",
+    "try_mediapipe_pointing",
+]
 
 
 def detect_colored_objects(
@@ -129,96 +148,3 @@ def detect_aruco_objects(
             }
         )
     return found
-
-
-def pointing_from_index_ray(
-    mcp_xy: tuple[float, float],
-    tip_xy: tuple[float, float],
-    objects: list[dict[str, Any]],
-    image_size: tuple[int, int],
-    min_confidence: float = 0.55,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    width, height = image_size
-    mcp = np.array(mcp_xy, dtype=float)
-    tip = np.array(tip_xy, dtype=float)
-    direction = tip - mcp
-    norm = float(np.linalg.norm(direction))
-    hands = {
-        "handedness": "right",
-        "landmark_confidence": 0.0,
-        "pointing": False,
-        "table_intersection_xy": None,
-    }
-    if norm < 1e-6:
-        return [], hands
-    direction = direction / norm
-    if norm < 8:
-        hands["landmark_confidence"] = 0.4
-        return [], hands
-    ahead = tip + direction * (norm * 0.25)
-    table_xy = [
-        float(np.clip(ahead[0] / max(width, 1), 0.0, 1.0)),
-        float(np.clip(ahead[1] / max(height, 1), 0.0, 1.0)),
-    ]
-    candidates: list[dict[str, Any]] = []
-    for obj in objects:
-        pos = np.array(obj.get("table_position_xy") or [0.5, 0.5], dtype=float)
-        dist = float(np.linalg.norm(pos - np.array(table_xy)))
-        confidence = max(0.0, min(0.99, 1.0 - dist / 0.35))
-        if confidence >= min_confidence:
-            candidates.append({"object_id": obj["object_id"], "confidence": confidence})
-    candidates.sort(key=lambda row: row["confidence"], reverse=True)
-    hands["landmark_confidence"] = 0.9 if candidates else 0.6
-    hands["pointing"] = bool(candidates)
-    hands["table_intersection_xy"] = table_xy if candidates else None
-    return candidates, hands
-
-
-def try_mediapipe_pointing(
-    frame_bgr: NDArray[np.uint8],
-    objects: list[dict[str, Any]],
-    min_confidence: float = 0.55,
-    landmarker: Any | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    empty_hands = {
-        "handedness": None,
-        "landmark_confidence": 0.0,
-        "pointing": False,
-        "table_intersection_xy": None,
-    }
-    if landmarker is None:
-        return [], empty_hands
-    height, width = frame_bgr.shape[:2]
-    try:
-        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        result = landmarker.process(rgb)
-    except Exception:
-        return [], empty_hands
-    if not getattr(result, "multi_hand_landmarks", None):
-        return [], empty_hands
-    hand = result.multi_hand_landmarks[0]
-    mcp = hand.landmark[INDEX_MCP]
-    tip = hand.landmark[INDEX_TIP]
-    return pointing_from_index_ray(
-        (mcp.x * width, mcp.y * height),
-        (tip.x * width, tip.y * height),
-        objects,
-        (width, height),
-        min_confidence,
-    )
-
-
-def maybe_create_hands() -> Any | None:
-    try:
-        import mediapipe as mp
-    except Exception:
-        return None
-    try:
-        return mp.solutions.hands.Hands(
-            static_image_mode=False,
-            max_num_hands=1,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-        )
-    except Exception:
-        return None

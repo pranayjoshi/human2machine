@@ -40,6 +40,65 @@ def test_sequence_gap_is_observable() -> None:
     assert anomaly.sequence == 4
 
 
+def test_sequence_gap_publishes_data_quality() -> None:
+    hub = new_hub()
+    first = unnormalized_event(event_id="gapq000000000001", sequence=1, source="crown")
+    second = unnormalized_event(event_id="gapq000000000002", sequence=5, source="crown")
+    assert hub.ingest(first) is not None
+    assert hub.ingest(second) is not None
+    quality_events = [event for event in hub.published if str(event.event_type) == "data.quality"]
+    assert quality_events
+    event = quality_events[-1]
+    assert event.source == "event-hub"
+    assert "sequence_gap" in event.payload["flags"]
+    assert event.payload["components"]["sequence_integrity"] == 0.0
+    assert 0.0 <= event.payload["score"] <= 1.0
+    assert event.payload["score"] < 1.0
+    assert event.payload["producer"] == "crown"
+    assert event.payload["previous_sequence"] == 1
+    assert event.payload["sequence"] == 5
+    assert event.payload["kind"] == "gap"
+
+
+def test_heartbeat_includes_sequence_metrics() -> None:
+    hub = new_hub()
+    hub.metrics.sequence_gaps = 2
+    hub.metrics.sequence_regressions = 1
+    hub.metrics.drops = 3
+    hub.metrics.invalid = 4
+    event = hub.emit_heartbeat()
+    assert event is not None
+    assert event.payload["sequence_gaps"] == 2
+    assert event.payload["sequence_regressions"] == 1
+    assert event.payload["drops"] == 3
+    assert event.payload["invalid"] == 4
+
+
+def test_clock_regression_publishes_timestamp_gap() -> None:
+    hub = new_hub()
+    start_session(hub)
+    base = int(1e12)
+    first = unnormalized_event(
+        event_id="clk0000000000001",
+        sequence=1,
+        source="ganglion-emg",
+        event_type="biosignal.chunk",
+        received_monotonic_ns=base + 10_000_000,
+    )
+    second = unnormalized_event(
+        event_id="clk0000000000002",
+        sequence=2,
+        source="ganglion-emg",
+        event_type="biosignal.chunk",
+        received_monotonic_ns=base + 1_000_000,
+    )
+    assert hub.ingest(first) is not None
+    assert hub.ingest(second) is not None
+    quality_events = [event for event in hub.published if str(event.event_type) == "data.quality"]
+    assert any("timestamp_gap" in event.payload.get("flags", []) for event in quality_events)
+    assert hub.metrics.clock_jumps == 1
+
+
 def test_sequence_regression_is_observable_and_still_published() -> None:
     hub = new_hub()
     first = unnormalized_event(event_id="reg0000000000001", sequence=5, source="eeg")

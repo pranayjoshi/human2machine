@@ -42,6 +42,15 @@ RECORDABLE_ADAPTER_TYPES = frozenset(
 
 PublishHook = Callable[[EventEnvelope], None]
 
+# Biosignal/motion chunks should arrive well under this; larger forward jumps are clock leaps.
+CLOCK_LEAP_NS = 1_000_000_000
+_CLOCK_LEAP_TYPES = frozenset(
+    {
+        EventType.BIOSIGNAL_CHUNK.value,
+        EventType.MOTION_CHUNK.value,
+    }
+)
+
 
 def encode_pub_message(event: EventEnvelope) -> bytes:
     """PUB frame: `event_type + b' ' + json_bytes` for optional SUB prefix filters."""
@@ -206,6 +215,16 @@ class EventHub:
             sequence=self._next_hub_sequence(),
             session_id=self.session.session_id if self.session.recording else None,
         )
+        payload = dict(event.payload)
+        payload.update(
+            {
+                "sequence_gaps": self.metrics.sequence_gaps,
+                "sequence_regressions": self.metrics.sequence_regressions,
+                "drops": self.metrics.drops,
+                "invalid": self.metrics.invalid,
+            }
+        )
+        event = event.model_copy(update={"payload": payload})
         return self._accept(event, from_adapter=False)
 
     def fail_active_session(self, reason: str = "hub_shutdown") -> EventEnvelope | None:
@@ -346,16 +365,54 @@ class EventHub:
         else:
             computed = received - self._hub_start_monotonic_ns
         last = self._last_normalized.get(envelope.source)
-        if last is not None and computed < last:
-            self.metrics.clock_jumps += 1
-            self._log.warning(
-                "normalized_time_regression",
-                source=envelope.source,
-                previous=last,
-                computed=computed,
-                event_id=envelope.event_id,
-            )
-            computed = last
+        if last is not None and envelope.source != self.source:
+            if computed < last:
+                self.metrics.clock_jumps += 1
+                self._log.warning(
+                    "normalized_time_regression",
+                    source=envelope.source,
+                    previous=last,
+                    computed=computed,
+                    event_id=envelope.event_id,
+                )
+                self._publish_data_quality(
+                    flags=["timestamp_gap"],
+                    score=0.0,
+                    components={"clock_integrity": 0.0},
+                    extra={
+                        "producer": envelope.source,
+                        "kind": "regression",
+                        "previous_normalized_ns": last,
+                        "normalized_ns": computed,
+                    },
+                )
+                computed = last
+            elif (
+                str(envelope.event_type) in _CLOCK_LEAP_TYPES
+                and computed - last > CLOCK_LEAP_NS
+            ):
+                leap_ns = computed - last
+                self.metrics.clock_jumps += 1
+                self._log.warning(
+                    "normalized_time_leap",
+                    source=envelope.source,
+                    previous=last,
+                    computed=computed,
+                    leap_ns=leap_ns,
+                    event_id=envelope.event_id,
+                )
+                score = max(0.0, min(1.0, CLOCK_LEAP_NS / leap_ns))
+                self._publish_data_quality(
+                    flags=["timestamp_gap"],
+                    score=score,
+                    components={"clock_integrity": 0.0},
+                    extra={
+                        "producer": envelope.source,
+                        "kind": "leap",
+                        "previous_normalized_ns": last,
+                        "normalized_ns": computed,
+                    },
+                )
         self._last_normalized[envelope.source] = computed
         updates: dict[str, Any] = {"normalized_time_ns": computed}
         if self.session.recording:
@@ -380,9 +437,14 @@ class EventHub:
         if envelope.sequence > previous + 1:
             kind = "gap"
             self.metrics.sequence_gaps += 1
+            missing = envelope.sequence - previous - 1
+            score = max(0.0, min(1.0, 1.0 / (1.0 + missing)))
+            flag = "sequence_gap"
         else:
             kind = "regression"
             self.metrics.sequence_regressions += 1
+            score = 0.0
+            flag = "sequence_regression"
         anomaly = SequenceAnomaly(
             source=envelope.source,
             previous=previous,
@@ -401,6 +463,66 @@ class EventHub:
             sequence_gaps=self.metrics.sequence_gaps,
             sequence_regressions=self.metrics.sequence_regressions,
         )
+        if envelope.source == self.source:
+            return
+        self._publish_data_quality(
+            flags=[flag],
+            score=score,
+            components={"sequence_integrity": 0.0},
+            extra={
+                "producer": envelope.source,
+                "previous_sequence": previous,
+                "sequence": envelope.sequence,
+                "kind": kind,
+            },
+        )
+
+    def _publish_data_quality(
+        self,
+        *,
+        flags: list[str],
+        score: float,
+        components: dict[str, float],
+        extra: dict[str, Any],
+    ) -> None:
+        try:
+            received = now_monotonic_ns()
+            session_anchor = self.session.session_monotonic_time_ns
+            if self.session.recording and session_anchor is not None:
+                normalized = max(0, received - session_anchor)
+            else:
+                normalized = received - self._hub_start_monotonic_ns
+            clamped = max(0.0, min(1.0, float(score)))
+            payload: dict[str, Any] = {
+                "score": clamped,
+                "components": components,
+                "flags": flags,
+                **extra,
+            }
+            event = EventEnvelope(
+                schema_version=SCHEMA_VERSION,
+                event_id=new_event_id(),
+                event_type=EventType.DATA_QUALITY,
+                source=self.source,
+                modality=None,
+                session_id=self.session.session_id if self.session.recording else None,
+                trial_id=self.session.trial_id if self.session.recording else None,
+                sequence=self._next_hub_sequence(),
+                source_time_ns=None,
+                received_monotonic_ns=received,
+                normalized_time_ns=normalized,
+                quality=clamped,
+                producer_version=PRODUCER_VERSION,
+                payload=payload,
+            )
+            self._emit_internal(event)
+        except Exception as exc:  # noqa: BLE001 — visibility must not crash ingest
+            self._log.warning(
+                "quality_publish_failed",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                flags=flags,
+            )
 
     def _is_duplicate(self, event_id: str) -> bool:
         if event_id in self._seen_ids:

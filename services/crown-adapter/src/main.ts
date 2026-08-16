@@ -1,6 +1,6 @@
 import { loadCrownConfig, loadEnvLocal } from "./config.ts";
 import { runCrownHardware } from "./hardware.ts";
-import { CrownMockGenerator } from "./mock.ts";
+import { CrownMockGenerator, SAMPLE_RATE_HZ, SAMPLES_PER_CHUNK } from "./mock.ts";
 import { createCrownClient, type CrownClient } from "./neurosityClient.ts";
 import { createPublisher, type Publisher } from "./publisher.ts";
 
@@ -10,6 +10,8 @@ export type CliOptions = {
   motion: boolean;
   packetLoss: number;
   durationMs: number;
+  disconnectAfterMs: number;
+  fast: boolean;
   endpoint?: string;
 };
 
@@ -20,6 +22,8 @@ export function parseArgs(argv: string[]): CliOptions {
     motion: false,
     packetLoss: 0,
     durationMs: 0,
+    disconnectAfterMs: 0,
+    fast: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -29,6 +33,8 @@ export function parseArgs(argv: string[]): CliOptions {
       opts.mock = false;
     } else if (arg === "--motion") {
       opts.motion = true;
+    } else if (arg === "--fast") {
+      opts.fast = true;
     } else if (arg === "--seed") {
       opts.seed = Number(argv[i + 1]);
       i += 1;
@@ -37,6 +43,9 @@ export function parseArgs(argv: string[]): CliOptions {
       i += 1;
     } else if (arg === "--duration-ms") {
       opts.durationMs = Number(argv[i + 1]);
+      i += 1;
+    } else if (arg === "--disconnect-after-ms") {
+      opts.disconnectAfterMs = Number(argv[i + 1]);
       i += 1;
     } else if (arg === "--endpoint") {
       opts.endpoint = argv[i + 1];
@@ -94,9 +103,18 @@ async function runMockLoop(
   });
   const started = Date.now();
   let lastHeartbeat = 0;
-  const intervalMs = (16 / 256) * 1000;
+  let simulatedMs = 0;
+  let disconnectFired = false;
+  const intervalMs = (SAMPLES_PER_CHUNK / SAMPLE_RATE_HZ) * 1000;
 
   while (!stopped()) {
+    const elapsedMs = args.fast ? simulatedMs : Date.now() - started;
+    if (args.disconnectAfterMs > 0 && !disconnectFired && elapsedMs >= args.disconnectAfterMs) {
+      for (const event of gen.simulateDisconnect()) {
+        await pub.send(event);
+      }
+      disconnectFired = true;
+    }
     const events = gen.next();
     for (const event of events) {
       await pub.send(event);
@@ -106,10 +124,17 @@ async function runMockLoop(
       await pub.send(gen.heartbeat(pub.droppedCount()));
       lastHeartbeat = now;
     }
-    if (args.durationMs > 0 && now - started >= args.durationMs) {
-      break;
+    if (args.fast) {
+      simulatedMs += intervalMs;
+      if (args.durationMs > 0 && simulatedMs >= args.durationMs) {
+        break;
+      }
+    } else {
+      if (args.durationMs > 0 && now - started >= args.durationMs) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 
   await pub.send(gen.shutdown());

@@ -7,6 +7,7 @@ import {
   ModalityFeaturePayloadSchema,
 } from "@intent/contracts";
 
+import { parseArgs } from "./main.ts";
 import { CrownMockGenerator, SAMPLE_RATE_HZ, SAMPLES_PER_CHUNK } from "./mock.ts";
 import { CROWN_CHANNELS } from "./quality.ts";
 import { deviceMsToNs } from "./timestamps.ts";
@@ -80,3 +81,42 @@ test("seeded generator is reproducible", () => {
   const b = collect(true, 3).map((event) => event.event_type);
   assert.deepEqual(a, b);
 });
+
+test("disconnect emits degraded/offline then new live samples", () => {
+  const gen = new CrownMockGenerator({ seed: 7 });
+  const before = collectFrom(gen, 4);
+  const eegBefore = before.filter((event) => event.event_type === "biosignal.chunk");
+  const lastBefore = eegBefore[eegBefore.length - 1];
+  assert.ok(lastBefore);
+  assert.ok((lastBefore.source_time_ns ?? 0) > 0);
+  const lastSeq = lastBefore.sequence;
+
+  const disconnect = gen.simulateDisconnect();
+  const statuses = disconnect
+    .filter((event) => event.event_type === "device.status")
+    .map((event) => event.payload.status);
+  assert.deepEqual(statuses, ["degraded", "offline", "healthy"]);
+
+  const after = gen.next();
+  const eegAfter = after.find((event) => event.event_type === "biosignal.chunk");
+  assert.ok(eegAfter);
+  assert.equal(eegAfter.source_time_ns, deviceMsToNs(0));
+  assert.ok(eegAfter.sequence > lastSeq + 1);
+  assert.notEqual(eegAfter.event_id, lastBefore.event_id);
+});
+
+test("parseArgs accepts fast mode and disconnect-after-ms", () => {
+  const opts = parseArgs(["--mock", "--fast", "--disconnect-after-ms", "250", "--duration-ms", "500"]);
+  assert.equal(opts.mock, true);
+  assert.equal(opts.fast, true);
+  assert.equal(opts.disconnectAfterMs, 250);
+  assert.equal(opts.durationMs, 500);
+});
+
+function collectFrom(gen: CrownMockGenerator, chunks: number) {
+  const events = [];
+  for (let i = 0; i < chunks; i += 1) {
+    events.push(...gen.next());
+  }
+  return events;
+}

@@ -91,6 +91,10 @@ def create_app(
     def public_config() -> dict[str, Any]:
         return runtime.public_config()
 
+    @app.get("/api/snapshot")
+    def snapshot() -> dict[str, Any]:
+        return runtime.snapshot()
+
     @app.post("/api/preflight")
     def preflight() -> dict[str, Any]:
         return runtime.preflight().model_dump(mode="json")

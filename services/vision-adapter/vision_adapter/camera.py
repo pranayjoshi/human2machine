@@ -10,13 +10,21 @@ from intent_runtime.heartbeat import heartbeat_event as runtime_heartbeat
 from numpy.typing import NDArray
 
 from vision_adapter.calibration import CalibrationMismatchError, CameraCalibration
-from vision_adapter.color_detector import (
-    DEFAULT_CATALOG,
-    detect_colored_objects,
-    maybe_create_hands,
-    try_mediapipe_pointing,
+from vision_adapter.color_detector import DEFAULT_CATALOG, detect_colored_objects
+from vision_adapter.head_direction import (
+    empty_head_direction,
+    head_direction_from_landmarks,
+    maybe_create_face_landmarker,
+    try_mediapipe_head_direction,
 )
 from vision_adapter.mock import FreezeDetector, make_event
+from vision_adapter.pointing import (
+    PointingSmoother,
+    empty_hands,
+    maybe_create_hands,
+    pointing_from_index_ray,
+    try_mediapipe_pointing,
+)
 from vision_adapter.tracker import DEFAULT_OBJECT_STALE_MS, ObjectTracker, stale_ms_from_config
 
 SOURCE = "vision-adapter"
@@ -155,6 +163,9 @@ class VisionHardwareRuntime:
         pointing_confidence_min: float = 0.55,
         publish_hz: float = 12.0,
         hands: Any | None = ...,
+        face: Any | None = ...,
+        hand_landmarks: dict[str, Any] | None = None,
+        face_landmarks: dict[str, Any] | None = None,
         object_stale_ms: float | None = None,
         calibration: CameraCalibration | None = None,
         config: dict[str, Any] | None = None,
@@ -169,10 +180,12 @@ class VisionHardwareRuntime:
         self._detector = FreezeDetector()
         self._last_frozen = False
         self._hands = maybe_create_hands() if hands is ... else hands
+        self._face = maybe_create_face_landmarker() if face is ... else face
+        self.hand_landmarks = hand_landmarks
+        self.face_landmarks = face_landmarks
+        self._smoother = PointingSmoother(min_confidence=pointing_confidence_min)
         stale_ms = (
-            DEFAULT_OBJECT_STALE_MS
-            if object_stale_ms is None
-            else float(object_stale_ms)
+            DEFAULT_OBJECT_STALE_MS if object_stale_ms is None else float(object_stale_ms)
         )
         if object_stale_ms is None and config is not None:
             stale_ms = stale_ms_from_config(config)
@@ -209,17 +222,8 @@ class VisionHardwareRuntime:
             objects = _apply_table_plane(objects, self.calibration)
         objects = self._tracker.update(objects, source_time_ns)
         visible = [item for item in objects if not item.get("stale")]
-        pointing: list[dict[str, Any]] = []
-        hands_payload = {
-            "handedness": None,
-            "landmark_confidence": 0.0,
-            "pointing": False,
-            "table_intersection_xy": None,
-        }
-        if self._hands is not None:
-            pointing, hands_payload = try_mediapipe_pointing(
-                frame, visible, self.pointing_confidence_min, self._hands
-            )
+        pointing, hands_payload = self._estimate_pointing(frame, visible)
+        head_payload = self._estimate_head_direction(frame, visible)
         quality = 0.35 if frozen else 0.96
         flags = ["camera_frozen"] if frozen else []
         if any(item.get("stale") for item in objects):
@@ -240,7 +244,7 @@ class VisionHardwareRuntime:
                     "frame_id": self.frame_id,
                     "objects": objects,
                     "pointing_candidates": pointing,
-                    "head_direction_candidates": [],
+                    "head_direction_candidates": list(head_payload.get("candidates") or []),
                 },
             )
         )
@@ -267,10 +271,10 @@ class VisionHardwareRuntime:
                 quality=quality,
                 payload={
                     "frame_id": self.frame_id,
-                    "yaw_deg": None,
-                    "pitch_deg": None,
-                    "confidence": 0.0,
-                    "candidates": [],
+                    "yaw_deg": head_payload.get("yaw_deg"),
+                    "pitch_deg": head_payload.get("pitch_deg"),
+                    "confidence": float(head_payload.get("confidence") or 0.0),
+                    "candidates": list(head_payload.get("candidates") or []),
                 },
             )
         )
@@ -311,14 +315,57 @@ class VisionHardwareRuntime:
         )
 
     def shutdown(self) -> EventEnvelope:
-        if self._hands is not None:
-            close = getattr(self._hands, "close", None)
+        for handle in (self._hands, self._face):
+            if handle is None:
+                continue
+            close = getattr(handle, "close", None)
             if close is not None:
                 try:
                     close()
                 except Exception:
                     pass
         return self._device_status("offline", "adapter stopping")
+
+    def _estimate_pointing(
+        self, frame: NDArray[np.uint8], objects: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        height, width = frame.shape[:2]
+        if self.hand_landmarks is not None:
+            mcp = self.hand_landmarks["mcp_xy"]
+            tip = self.hand_landmarks["tip_xy"]
+            landmark_confidence = float(self.hand_landmarks.get("landmark_confidence", 0.9))
+            pointing, hands_payload = pointing_from_index_ray(
+                (float(mcp[0]), float(mcp[1])),
+                (float(tip[0]), float(tip[1])),
+                objects,
+                (width, height),
+                self.pointing_confidence_min,
+                landmark_confidence=landmark_confidence,
+            )
+        elif self._hands is not None:
+            pointing, hands_payload = try_mediapipe_pointing(
+                frame, objects, self.pointing_confidence_min, self._hands
+            )
+        else:
+            return [], empty_hands(landmark_confidence=0.0, handedness=None)
+        smoothed = self._smoother.update(
+            pointing,
+            landmark_confidence=float(hands_payload.get("landmark_confidence") or 0.0),
+        )
+        hands_payload["pointing"] = bool(smoothed)
+        if not smoothed:
+            hands_payload["table_intersection_xy"] = None
+        return smoothed, hands_payload
+
+    def _estimate_head_direction(
+        self, frame: NDArray[np.uint8], objects: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        height, width = frame.shape[:2]
+        if self.face_landmarks is not None:
+            return head_direction_from_landmarks(self.face_landmarks, objects, (width, height))
+        if self._face is not None:
+            return try_mediapipe_head_direction(frame, objects, self._face)
+        return empty_head_direction()
 
     def _device_status(self, status: str, detail: str) -> EventEnvelope:
         return make_event(

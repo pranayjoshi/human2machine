@@ -34,6 +34,7 @@ def test_setup_shape(client: TestClient) -> None:
     assert isinstance(body["mock"], bool)
     assert body["machine_mode"]
     assert body["eeg_shadow_only"] is True
+    assert body["emg_shadow_only"] is True
     assert "adapter_push" in body["ports"]
     assert "console_api" in body["ports"]
     assert isinstance(body["crown"]["env_vars_present"], bool)

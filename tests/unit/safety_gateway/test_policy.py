@@ -433,7 +433,7 @@ def test_config_matches_checked_in_yaml() -> None:
     assert loaded.auto_approve_threshold == 0.92
     assert loaded.confirmation_threshold == 0.65
     assert loaded.minimum_target_margin == 0.20
-    assert loaded.require_emg_confirmation_for_deictic is True
+    assert loaded.require_emg_confirmation_for_deictic is False
     assert loaded.policy_version == "safety-policy-v1"
 
 

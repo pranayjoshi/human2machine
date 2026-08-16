@@ -34,7 +34,7 @@ export type PublicConfig = {
   schema_version: string;
   producer_version: string;
   safety?: { mode?: string; confirmation_timeout_ms?: number; policy_version?: string };
-  fusion?: { model_id?: string; eeg_shadow_only?: boolean };
+  fusion?: { model_id?: string; eeg_shadow_only?: boolean; emg_shadow_only?: boolean };
   storage?: { record_audio?: boolean; record_video?: boolean };
 };
 
@@ -165,6 +165,16 @@ export type PlotSnapshot = {
   t_ms: number[];
 };
 
+export type BiosignalHealth = {
+  quality: number | null;
+  packet_loss_count: number;
+  last_data_age_ms: number | null;
+  sequence_gaps: number;
+  last_sequence: number | null;
+  shadow_only: boolean;
+  sample_rate_hz: number | null;
+};
+
 export type LiveState = {
   mock: boolean;
   machine_mode: string;
@@ -181,6 +191,10 @@ export type LiveState = {
   timeline: TimelineItem[];
   eeg: PlotSnapshot;
   emg: PlotSnapshot;
+  biosignals?: {
+    eeg: BiosignalHealth;
+    emg: BiosignalHealth;
+  };
   server_time_ms: number;
 };
 
@@ -219,6 +233,7 @@ export type SetupStatus = {
   mock: boolean;
   machine_mode: string;
   eeg_shadow_only: boolean;
+  emg_shadow_only: boolean;
   ports: Record<string, string | number>;
   crown: {
     enabled: boolean;
@@ -230,6 +245,7 @@ export type SetupStatus = {
     enabled: boolean;
     mock: boolean;
     serial_port_set: boolean;
+    shadow_only?: boolean;
   };
   audio: {
     enabled: boolean;

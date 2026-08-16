@@ -305,12 +305,34 @@ Nothing in this list belongs in Git as a secret or a machine-specific path:
 
 Thresholds (fusion weights, safety cutoffs, dwell times) stay in versioned YAML under `configs/`.
 
-## 10. Milestone status
+## 10. Milestone 1 concurrent soak
+
+Twenty-minute **equivalent** concurrent Crown + Ganglion recording. This milestone is acquisition and record only: no biosignal is used for control, and fusion/safety are not required.
+
+### Mock / CI
+
+```bash
+just soak-biosignals
+pytest tests/end_to_end/test_milestone1_soak.py
+```
+
+`just soak-biosignals` (and `scripts/soak_biosignals.py --fast`, the default) generates a 20-minute *timeline* of mock EEG + EMG as fast as possible. CI does not sleep for 20 wall-clock minutes. Packet loss (~1%) and a timestamp/sequence gap are injected so hub and recorder metrics can show them.
+
+### Hardware
+
+1. `just run-hardware --confirm` (hub + recorder + both adapters with `--hardware`).
+2. Start a session with consent and record **20 wall-clock minutes**.
+3. Confirm packet loss and timestamp/sequence gaps are visible in the developer console / recorded metrics.
+4. Confirm EEG never drives an action (shadow-only). EMG is also not used for control in this soak.
+
+`just soak-biosignals --hardware` prints this procedure and does not fake devices.
+
+## 11. Milestone status
 
 | Milestone | Meaning | Status |
 |---|---|---|
 | 0 | Synthetic closed loop, mock adapters, console | Implemented; `pytest tests/end_to_end` |
-| 1 | Crown + Ganglion concurrent recording | Hardware paths implemented; 20-minute soak is a manual gate |
+| 1 | Crown + Ganglion concurrent recording | Done in mock/CI (`pytest tests/end_to_end/test_milestone1_soak.py`); hardware 20-minute soak is documented above |
 | 2 | Constrained voice + four-object vision | Hardware paths implemented; accuracy gates are manual |
 | 3 | Personalized EMG | Calibration UI + training hook; promote only after held-out metrics |
 | 4 | Closed-loop multimodal demo | Mock demo + live UI; 100-trial eval is operator-run |

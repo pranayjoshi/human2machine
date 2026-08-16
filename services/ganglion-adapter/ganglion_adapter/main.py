@@ -105,6 +105,7 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
             device_alias="ganglion-mock" if mock else "ganglion",
             capture_mode="usb_dongle_mock" if mock else "usb_dongle",
             model_id="emg-mock-rms-v0" if mock else "emg-rms-v0",
+            shadow_only=bool(ganglion.get("shadow_only", True)),
             acquisition=acquisition,
         )
         started = time.monotonic()

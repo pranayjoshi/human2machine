@@ -20,7 +20,8 @@ from intent_contracts.events import IntentDecisionPayload
 from intent_contracts.validation import parse_unnormalized_event
 
 NOW_NS = 100_000_000
-CONFIG = FusionConfig()
+CONFIG = FusionConfig(emg_shadow_only=False)
+M1_CONFIG = FusionConfig()  # emg_shadow_only defaults True
 
 
 def _envelope(
@@ -624,3 +625,32 @@ def test_never_emits_action_command() -> None:
         EventType.INTENT_TIMEOUT,
         EventType.SERVICE_HEARTBEAT,
     }
+
+
+def test_milestone1_emg_shadow_does_not_control() -> None:
+    """Milestone 1: biosignals are recorded but EMG must not change live decisions."""
+    without = [
+        session_started(),
+        machine_ready(),
+        audio_intent("evt_audio_1", action="REQUEST_HANDOFF", target_reference="DEICTIC"),
+        vision_objects(
+            "evt_vision_1",
+            pointing=[{"object_id": "object_blue_1", "confidence": 0.82}],
+        ),
+    ]
+    with_emg = [
+        *without,
+        emg_feature("evt_emg_01", label="confirm"),
+        emg_feature("evt_emg_cancel", label="cancel", confidence=0.93, time_ns=81_000_000),
+    ]
+    left = run(without, config=M1_CONFIG)
+    right = run(with_emg, config=M1_CONFIG)
+    left_d = decisions(left)
+    right_d = decisions(right)
+    assert [item["action"] for item in left_d] == [item["action"] for item in right_d]
+    if left_d:
+        assert left_d[-1]["confidence"] == right_d[-1]["confidence"]
+        assert "evt_emg_01" not in {item["event_id"] for item in right_d[-1]["evidence"]}
+    assert not any(
+        event.payload.get("action") == "CANCEL" for event in right.events if event.event_type == EventType.INTENT_DECISION
+    )

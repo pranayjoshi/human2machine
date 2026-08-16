@@ -87,6 +87,18 @@ export default function SetupPage() {
                 <dd>{setup.eeg_shadow_only ? "yes — never drives action" : "unexpected"}</dd>
               </div>
               <div>
+                <dt>EMG shadow-only (Milestone 1)</dt>
+                <dd>{setup.emg_shadow_only ? "yes — does not drive action" : "unexpected"}</dd>
+              </div>
+              <div>
+                <dt>EMG shadow-only (Milestone 1)</dt>
+                <dd>
+                  {setup.emg_shadow_only
+                    ? "yes — recorded, does not drive action yet"
+                    : "unexpected"}
+                </dd>
+              </div>
+              <div>
                 <dt>Mock console-api</dt>
                 <dd>{setup.mock ? "yes" : "no"}</dd>
               </div>
@@ -105,8 +117,9 @@ export default function SetupPage() {
               <h2>OpenBCI Ganglion</h2>
               <p>Charge the approved battery before electrodes. Never wear it while charging.</p>
               <p className="muted">
-                Discover the port with <code>python -m ganglion_adapter.main --hardware --list-devices</code>{" "}
-                and set <code>devices.ganglion.serial_port</code>.
+                EMG is shadow-only for Milestone 1 and does not drive action. Discover the port with{" "}
+                <code>python -m ganglion_adapter.main --hardware --list-devices</code> and set{" "}
+                <code>devices.ganglion.serial_port</code>.
               </p>
             </section>
             <section className="panel">

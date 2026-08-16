@@ -54,6 +54,7 @@ class GanglionMockRuntime:
     device_alias: str = "ganglion-mock"
     capture_mode: str = "usb_dongle_mock"
     model_id: str = "emg-mock-rms-v0"
+    shadow_only: bool = True
     acquisition: object | None = None
 
     sequence: int = 0
@@ -193,7 +194,7 @@ class GanglionMockRuntime:
                             for key in ("rest", "confirm", "cancel", "unknown")
                         },
                         "model_id": self.model_id,
-                        "shadow_only": False,
+                        "shadow_only": self.shadow_only,
                     },
                 )
             )
