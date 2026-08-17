@@ -11,6 +11,11 @@ export type ServiceView = {
   error_count: number;
   last_data_age_ms?: number | null;
   recovery?: string | null;
+  detail?: string | null;
+  rms?: number | null;
+  peak?: number | null;
+  listening?: boolean;
+  asr_backend?: string | null;
 };
 
 export type PreflightCheck = {
@@ -183,6 +188,7 @@ export type LiveState = {
   active_trial_id?: string | null;
   services: ServiceView[];
   vision: VisionState | null;
+  vision_preview?: { available: boolean; width: number; height: number; age_s: number | null };
   audio: AudioState | null;
   intent: IntentState | null;
   safety: SafetyState | null;
@@ -241,10 +247,12 @@ export type SetupStatus = {
     env_vars_present: boolean;
     shadow_only: boolean;
   };
-  ganglion: {
+    ganglion: {
     enabled: boolean;
     mock: boolean;
     serial_port_set: boolean;
+    transport?: string;
+    ble_configured?: boolean;
     shadow_only?: boolean;
   };
   audio: {
@@ -274,13 +282,51 @@ export type SetupStatus = {
 export type EmgCalibrationStatus = {
   ok: boolean;
   protocol: string;
-  phase: "idle" | "rest" | "confirm" | "cancel" | "false_trigger" | "complete" | string;
+  phase: "idle" | "rest" | "confirm" | "cancel" | "random" | "train" | "false_trigger" | "complete" | string;
   counts: Record<string, number>;
   target_seconds: number;
   target_count: number;
   instruction: string;
   eeg_used: boolean;
   training_job: string | null;
+  class_balance?: Record<string, number>;
+  window_count?: number;
+  prompt_label?: string | null;
+  capturing?: boolean;
+  elapsed_seconds?: number;
+  remaining_seconds?: number;
+  metrics?: {
+    estimator?: string;
+    cross_block_balanced_accuracy?: number;
+    n_train?: number;
+    n_test?: number;
+    split_method?: string;
+    held_out_blocks?: string[];
+    train_class_balance?: Record<string, number>;
+    test_class_balance?: Record<string, number>;
+    held_out?: {
+      n?: number;
+      balanced_accuracy?: number;
+      confusion_matrix?: Record<string, Record<string, number>>;
+    };
+    false_trigger?: Record<string, number> | null;
+    cancel_latency_ms?: number;
+    passed_cross_block?: boolean;
+    gates?: Record<string, number>;
+  } | null;
+  false_trigger?: {
+    duration_s?: number;
+    n_windows?: number;
+    confirm_commits?: number;
+    cancel_commits?: number;
+    false_confirm_per_10min?: number;
+    false_cancel_per_10min?: number;
+  } | null;
+  candidate_model_id?: string | null;
+  promoted_model_id?: string | null;
+  current_model_id?: string | null;
+  can_promote?: boolean;
+  train_error?: string | null;
 };
 
 export const PLOT_CAP = 150;

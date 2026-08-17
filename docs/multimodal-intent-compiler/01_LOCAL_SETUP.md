@@ -83,8 +83,6 @@ pip install -e ".[dev]"
 Use Node 22 LTS or the current supported LTS. The workspace needs:
 
 ```text
-@neurosity/sdk
-rxjs
 zeromq
 zod
 tsx
@@ -114,24 +112,23 @@ Document permissions in the troubleshooting guide. Do not instruct users to disa
 
 ## 5. Secret management
 
-Create `.env.example` with names only:
+Create `.env.example` with names only. Crown OSC prefers `configs/local.yaml` (`devices.crown.ip_address`, `devices.crown.device_id`). Optional env overrides:
 
 ```text
-NEUROSITY_EMAIL=
-NEUROSITY_PASSWORD=
+CROWN_IP=
 NEUROSITY_DEVICE_ID=
 ```
 
-For development, load values from an ignored `.env.local`. Before an external pilot, store credentials in macOS Keychain and retrieve them at runtime. Never log access tokens, email addresses, or raw credentials.
+For development, load values from an ignored `.env.local`. Never log access tokens, email addresses, or raw credentials.
 
 ## 6. Device preflight
 
 ### Crown
 
 - Update Crown OS through its supported workflow.
-- Claim the device in Neurosity Developer Console.
-- Confirm the official sample app receives brainwaves and accelerometer events.
-- Confirm the Crown and Mac are on reliable Wi-Fi.
+- Enable OSC in the Neurosity Developer Console (device settings → Open Sound Control).
+- Put the Crown and Mac on the same Wi-Fi.
+- BrainFlow listens on UDP 9000; a headset IP is not required.
 
 ### Ganglion
 

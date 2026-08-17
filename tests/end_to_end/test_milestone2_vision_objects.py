@@ -25,7 +25,7 @@ from vision_adapter.color_detector import (
 from vision_adapter.mock import FreezeDetector
 from vision_adapter.tracker import ObjectTracker
 
-from tests.unit.adapters.test_vision_hardware import (
+from tests.helpers.vision_images import (
     EXPECTED_IDS,
     FakeCamera,
     aruco_four_markers_image,

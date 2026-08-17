@@ -50,9 +50,18 @@ ganglion:
   bandpass_hz: [20, 90]
   notch_hz: 60
   dwell_ms: 200
+  cancel_dwell_ms: 150
   hysteresis: 0.12
   refractory_ms: 400
   confidence_threshold: 0.7
+  quality_threshold: 0.4
+  model_dir: models/emg
+  rest_seconds: 30
+  gesture_repetitions: 20
+  gesture_capture_ms: 1500
+  random_block_repetitions: 20
+  false_trigger_seconds: 600
+  promote_cross_block_balanced_accuracy: 0.90
 
 audio:
   sample_rate_hz: 16000

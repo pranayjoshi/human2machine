@@ -44,11 +44,11 @@ export default function SetupPage() {
       {setup ? (
         <>
           <section className="panel callout" aria-labelledby="secrets-heading">
-            <h2 id="secrets-heading">Secrets stay on disk</h2>
+            <h2 id="secrets-heading">Config stays on disk</h2>
             <p>
-              This browser never stores passwords, tokens, or emails. Edit ignored{" "}
-              <code>.env.local</code> (Neurosity) and <code>configs/local.yaml</code> (serial port,
-              camera index, mic name). Then restart the affected adapter.
+              This browser never stores passwords, tokens, or emails. Edit{" "}
+              <code>configs/local.yaml</code> for Ganglion transport, camera index,
+              and mic name. Then restart the affected adapter.
             </p>
             <ul>
               {(setup.operator_notes ?? []).map((note) => (
@@ -75,8 +75,12 @@ export default function SetupPage() {
               ))}
             </ul>
             <dl className="kv" style={{ marginTop: "1rem" }}>
-              <ConfigFlag label="Crown env vars present" set={setup.crown.env_vars_present} />
+              <ConfigFlag label="Crown OSC path ready" set={setup.crown.env_vars_present} />
               <ConfigFlag label="Ganglion serial_port set" set={setup.ganglion.serial_port_set} />
+              <ConfigFlag
+                label="Ganglion Bluetooth (native BLE)"
+                set={Boolean(setup.ganglion.ble_configured)}
+              />
               <ConfigFlag label="Audio device_name set" set={setup.audio.device_name_set} />
               <div>
                 <dt>Camera index</dt>
@@ -107,19 +111,20 @@ export default function SetupPage() {
           <div className="grid-2" style={{ marginTop: "1rem" }}>
             <section className="panel">
               <h2>Neurosity Crown</h2>
-              <p>Charge, fit, same Wi-Fi as this Mac. Claim the device in the Neurosity console.</p>
+              <p>Charge, fit, same Wi-Fi as this Mac. Enable OSC in the Neurosity console.</p>
               <p className="muted">
-                Put <code>NEUROSITY_EMAIL</code>, secret, and <code>NEUROSITY_DEVICE_ID</code> in{" "}
-                <code>.env.local</code> only. EEG is shadow-only.
+                Enable OSC in the Neurosity console. BrainFlow listens on UDP 9000; no headset IP
+                is required. EEG is shadow-only.
               </p>
             </section>
             <section className="panel">
               <h2>OpenBCI Ganglion</h2>
               <p>Charge the approved battery before electrodes. Never wear it while charging.</p>
               <p className="muted">
-                EMG is shadow-only for Milestone 1 and does not drive action. Discover the port with{" "}
-                <code>python -m ganglion_adapter.main --hardware --list-devices</code> and set{" "}
-                <code>devices.ganglion.serial_port</code>.
+                EMG is shadow-only for Milestone 1 and does not drive action. For Bluetooth, set{" "}
+                <code>devices.ganglion.transport: ble</code> and run{" "}
+                <code>python -m ganglion_adapter.main --hardware --list-devices</code>. USB dongle
+                still uses <code>devices.ganglion.serial_port</code>.
               </p>
             </section>
             <section className="panel">

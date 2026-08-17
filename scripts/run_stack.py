@@ -11,25 +11,42 @@ import sys
 import time
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(ROOT / ".env.local", override=False)
 
 
 def stack_commands(python: str, *, mock: bool) -> list[list[str]]:
-    """Process list shared with scripts/demo_mvp.py --spawn."""
-    mock_flag = ["--mock"] if mock else []
+    """Process list shared with scripts/demo_mvp.py --spawn.
+
+    Hardware mode opens Crown, Ganglion, mic, and camera. Fusion, safety, and
+    the robot simulator stay on ``--mock``: the physical arm is out of scope.
+    """
+    adapter_flag = ["--mock"] if mock else ["--hardware"]
+    mock_only = ["--mock"]
+    optional_mock = mock_only if mock else []
     return [
-        [python, "-m", "event_hub.main", *mock_flag],
-        [python, "-m", "fusion_runtime.main", *mock_flag],
-        [python, "-m", "safety_gateway.main", *mock_flag],
-        [python, "-m", "robot_simulator.main", *mock_flag],
-        [python, "-m", "session_recorder.main", *mock_flag],
-        [python, "-m", "console_api.main", *mock_flag],
-        [python, "-m", "ganglion_adapter.main", *mock_flag],
-        [python, "-m", "audio_adapter.main", *mock_flag],
-        [python, "-m", "vision_adapter.main", *mock_flag],
-        ["pnpm", "--filter", "@intent/crown-adapter", "start", "--", *mock_flag],
+        [python, "-m", "event_hub.main", *optional_mock],
+        [python, "-m", "fusion_runtime.main", *mock_only],
+        [python, "-m", "safety_gateway.main", *mock_only],
+        [python, "-m", "robot_simulator.main", *mock_only],
+        [python, "-m", "session_recorder.main", *optional_mock],
+        [python, "-m", "console_api.main", *optional_mock],
+        [python, "-m", "ganglion_adapter.main", *adapter_flag],
+        [python, "-m", "audio_adapter.main", *adapter_flag],
+        [python, "-m", "vision_adapter.main", *adapter_flag],
+        [python, "-m", "crown_adapter.main", *adapter_flag],
         ["pnpm", "--filter", "@intent/developer-console", "dev"],
     ]
+
+
+def is_optional_stack_child(command: list[str] | tuple[str, ...], *, mock: bool) -> bool:
+    """Shadow-only biosignals must not tear down the hardware stack."""
+    if mock:
+        return False
+    blob = " ".join(str(part) for part in command)
+    return "crown_adapter.main" in blob or "ganglion_adapter.main" in blob
 
 
 def spawn(command: list[str], extra_env: dict[str, str] | None = None) -> subprocess.Popen:
@@ -44,6 +61,7 @@ def spawn(command: list[str], extra_env: dict[str, str] | None = None) -> subpro
         str(ROOT / "services/session-recorder"),
         str(ROOT / "services/console-api"),
         str(ROOT / "services/ganglion-adapter"),
+        str(ROOT / "services/crown-adapter"),
         str(ROOT / "services/audio-adapter"),
         str(ROOT / "services/vision-adapter"),
     ]
@@ -88,11 +106,23 @@ def main() -> int:
 
     children.extend(spawn(command) for command in stack_commands(sys.executable, mock=args.mock))
     print("stack launched; Ctrl+C to stop")
+    ignored: set[int] = set()
     try:
         while True:
             for child in children:
+                if id(child) in ignored:
+                    continue
                 code = child.poll()
                 if code not in (None, 0):
+                    args_list = list(child.args) if isinstance(child.args, (list, tuple)) else []
+                    if is_optional_stack_child(args_list, mock=args.mock):
+                        print(
+                            f"optional child exited with {code}: {child.args} "
+                            "(shadow-only biosignal adapter; the rest of the stack continues)",
+                            file=sys.stderr,
+                        )
+                        ignored.add(id(child))
+                        continue
                     print(f"child exited with {code}: {child.args}", file=sys.stderr)
                     shutdown(children)
                     return code

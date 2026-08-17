@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -25,7 +26,11 @@ from vision_adapter.pointing import (
     pointing_from_index_ray,
     try_mediapipe_pointing,
 )
+from vision_adapter.preview import write_preview_jpeg
+from vision_adapter.protobuf_compat import patch_protobuf_get_prototype
 from vision_adapter.tracker import DEFAULT_OBJECT_STALE_MS, ObjectTracker, stale_ms_from_config
+
+patch_protobuf_get_prototype()
 
 SOURCE = "vision-adapter"
 
@@ -169,6 +174,8 @@ class VisionHardwareRuntime:
         object_stale_ms: float | None = None,
         calibration: CameraCalibration | None = None,
         config: dict[str, Any] | None = None,
+        preview_path: Any | None = None,
+        preview_hz: float = 8.0,
     ) -> None:
         self.camera = camera
         self.catalog = catalog or [dict(row) for row in DEFAULT_CATALOG]
@@ -192,6 +199,9 @@ class VisionHardwareRuntime:
         self.object_stale_ms = stale_ms
         self.calibration = calibration
         self._tracker = ObjectTracker(stale_ms=stale_ms)
+        self.preview_path = Path(preview_path) if preview_path is not None else None
+        self.preview_hz = max(float(preview_hz), 0.5)
+        self._last_preview_mono = 0.0
 
     def render_frame(self, monotonic_ns: int | None = None) -> list[EventEnvelope]:
         latest = self.camera.latest()
@@ -205,6 +215,7 @@ class VisionHardwareRuntime:
         frame, source_time_ns, _received_ns = latest
         frozen = self._detector.observe(source_time_ns, mono)
         self._last_frozen = frozen
+        self._maybe_write_preview(frame)
         if self.calibration is not None:
             height, width = frame.shape[:2]
             if int(self.calibration.width) != int(width) or int(self.calibration.height) != int(
@@ -303,6 +314,18 @@ class VisionHardwareRuntime:
         )
         self.frame_id += 1
         return events
+
+    def _maybe_write_preview(self, frame: NDArray[np.uint8]) -> None:
+        if self.preview_path is None:
+            return
+        now = time.monotonic()
+        if now - self._last_preview_mono < 1.0 / self.preview_hz:
+            return
+        try:
+            write_preview_jpeg(frame, self.preview_path)
+            self._last_preview_mono = now
+        except Exception:
+            return
 
     def heartbeat(self, uptime_seconds: float, dropped: int) -> EventEnvelope:
         return runtime_heartbeat(

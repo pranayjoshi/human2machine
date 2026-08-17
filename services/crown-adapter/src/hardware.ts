@@ -1,12 +1,14 @@
 import type { CrownConfig } from "./config.ts";
 import { deviceStatusEvent, heartbeatEvent, makeEvent, type UnnormalizedEvent } from "./events.ts";
 import type { CrownAccel, CrownClient, CrownEpoch } from "./neurosityClient.ts";
+import { isTransientNeurosityAuthError } from "./neurosityClient.ts";
 import type { Publisher } from "./publisher.ts";
 import { CROWN_CHANNELS, sanitizeSamples, scoreQuality } from "./quality.ts";
 import { deviceMsToNs } from "./timestamps.ts";
 
 const MOTION_AXES = ["x", "y", "z"];
 const DEVICE_ALIAS = "crown";
+export const LOGIN_TIMEOUT_MS = 90_000;
 
 export type HardwareDeps = {
   client: CrownClient;
@@ -16,6 +18,7 @@ export type HardwareDeps = {
   durationMs: number;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  loginTimeoutMs?: number;
 };
 
 type AccelState = {
@@ -35,8 +38,8 @@ export async function runCrownHardware(deps: HardwareDeps): Promise<void> {
   let chunksEmitted = 0;
   let packetLossCount = 0;
   let lastStartTime = Number.NEGATIVE_INFINITY;
-  let lastDataMs = now();
-  let lastHeartbeat = 0;
+  let lastDataMs: number | null = null;
+  let lastHeartbeat = Number.NEGATIVE_INFINITY;
   let attempt = 0;
   let clockOffsetNs: number | null = null;
   const accel: AccelState = { x: 0, y: 0, z: 0, magnitude: 0, hasSample: false };
@@ -56,7 +59,7 @@ export async function runCrownHardware(deps: HardwareDeps): Promise<void> {
     if (t - lastHeartbeat < deps.config.heartbeatSeconds * 1000) {
       return;
     }
-    const age = t - lastDataMs;
+    const age = lastDataMs == null ? Number.NaN : t - lastDataMs;
     await send(
       heartbeatEvent(
         nextSeq(),
@@ -73,11 +76,36 @@ export async function runCrownHardware(deps: HardwareDeps): Promise<void> {
   const halt = () => deps.stopped() || timedOut();
 
   try {
+    await send(deviceStatusEvent(nextSeq(), "degraded", "connecting to Neurosity", {}, DEVICE_ALIAS));
+    await maybeHeartbeat("degraded");
     while (!halt()) {
       try {
-        await deps.client.login();
+        await loginWhileHeartbeating({
+          login: () => deps.client.login(),
+          halt,
+          maybeHeartbeat,
+          sleep,
+          now,
+          timeoutMs: deps.loginTimeoutMs ?? LOGIN_TIMEOUT_MS,
+          onTimeout: async () => {
+            try {
+              await deps.client.disconnect();
+            } catch {
+              // ignore
+            }
+          },
+        });
         attempt = 0;
-        await send(deviceStatusEvent(nextSeq(), "healthy", "crown stream started", {}, DEVICE_ALIAS));
+        chunksEmitted = 0;
+        await send(
+          deviceStatusEvent(
+            nextSeq(),
+            "degraded",
+            "crown logged in; waiting for EEG samples (close console.neurosity.co if it holds the stream)",
+            {},
+            DEVICE_ALIAS,
+          ),
+        );
         await consumeLiveStreams({
           client: deps.client,
           config: deps.config,
@@ -115,8 +143,25 @@ export async function runCrownHardware(deps: HardwareDeps): Promise<void> {
             for (const event of events.events) {
               await send(event);
             }
+            if (chunksEmitted === 0) {
+              await send(deviceStatusEvent(nextSeq(), "healthy", "crown stream started", {}, DEVICE_ALIAS));
+            }
             chunksEmitted += 1;
             lastDataMs = now();
+          },
+          onIdle: async () => {
+            if (chunksEmitted > 0) {
+              return;
+            }
+            await send(
+              deviceStatusEvent(
+                nextSeq(),
+                "degraded",
+                "no EEG samples yet; close console.neurosity.co and the Neurosity app so this adapter can take the Crown stream",
+                {},
+                DEVICE_ALIAS,
+              ),
+            );
           },
         });
         if (halt()) {
@@ -127,19 +172,58 @@ export async function runCrownHardware(deps: HardwareDeps): Promise<void> {
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (isMissingCredentials(message)) {
-          await send(deviceStatusEvent(nextSeq(), "offline", "missing Neurosity credentials", {}, DEVICE_ALIAS));
-          throw error;
+        if (isLoginInterrupted(message) && halt()) {
+          break;
         }
-        await send(
-          deviceStatusEvent(
-            nextSeq(),
-            "degraded",
-            "crown disconnected; reconnecting",
-            { reconnect_attempt: attempt + 1 },
-            DEVICE_ALIAS,
-          ),
-        );
+        if (isLoginTimeout(message)) {
+          await send(
+            deviceStatusEvent(
+              nextSeq(),
+              "degraded",
+              "Neurosity login timed out; close console.neurosity.co and the Neurosity app so this adapter can take the Crown stream",
+              { reconnect_attempt: attempt + 1 },
+              DEVICE_ALIAS,
+            ),
+          );
+        } else if (isDeviceSelectionFailure(message)) {
+          await send(
+            deviceStatusEvent(nextSeq(), "degraded", message, { reconnect_attempt: attempt + 1 }, DEVICE_ALIAS),
+          );
+        } else if (isTransientNeurosityAuthError(message) || /user claims were not ready/i.test(message)) {
+          await send(
+            deviceStatusEvent(
+              nextSeq(),
+              "degraded",
+              "Neurosity login failed before user claims were ready; retrying",
+              { reconnect_attempt: attempt + 1 },
+              DEVICE_ALIAS,
+            ),
+          );
+        } else if (isMissingCredentials(message)) {
+          await send(deviceStatusEvent(nextSeq(), "offline", "missing Neurosity credentials", {}, DEVICE_ALIAS));
+          if (attempt === 0) {
+            console.error(
+              JSON.stringify({
+                level: "error",
+                service: "crown-adapter",
+                msg: "missing Neurosity credentials; copy .env.example to .env.local and set NEUROSITY_EMAIL, NEUROSITY_PASSWORD, and NEUROSITY_DEVICE_ID",
+              }),
+            );
+          }
+        } else {
+          const detail = isAuthFailure(message)
+            ? "neurosity authentication failed; reconnecting"
+            : "crown disconnected; reconnecting";
+          await send(
+            deviceStatusEvent(
+              nextSeq(),
+              "degraded",
+              detail,
+              { reconnect_attempt: attempt + 1 },
+              DEVICE_ALIAS,
+            ),
+          );
+        }
       }
 
       if (halt()) {
@@ -180,6 +264,69 @@ export function isMissingCredentials(message: string): boolean {
     message.includes("NEUROSITY_PASSWORD") ||
     message.includes("NEUROSITY_DEVICE_ID")
   );
+}
+
+export function isAuthFailure(message: string): boolean {
+  if (isMissingCredentials(message)) {
+    return false;
+  }
+  return /password|passwd|token|secret|authorization|unauthori[sz]ed|unauthenticated|invalid.?credential/i.test(
+    message,
+  );
+}
+
+export function isLoginTimeout(message: string): boolean {
+  return /neurosity login timed out/i.test(message);
+}
+
+export function isLoginInterrupted(message: string): boolean {
+  return /halted during neurosity login/i.test(message);
+}
+
+export function isDeviceSelectionFailure(message: string): boolean {
+  return /no Crown devices claimed|did not match a claimed Crown|multiple Crown devices/i.test(
+    message,
+  );
+}
+
+type Settle = { status: "ok" } | { status: "err"; error: unknown };
+
+export async function loginWhileHeartbeating(opts: {
+  login: () => Promise<void>;
+  halt: () => boolean;
+  maybeHeartbeat: (status: string) => Promise<void>;
+  sleep: (ms: number) => Promise<void>;
+  now: () => number;
+  timeoutMs: number;
+  onTimeout?: () => Promise<void>;
+}): Promise<void> {
+  let settled: Settle | null = null;
+  opts.login().then(
+    () => {
+      settled = { status: "ok" };
+    },
+    (error) => {
+      settled = { status: "err", error };
+    },
+  );
+  const deadline = opts.now() + Math.max(1, opts.timeoutMs);
+  while (settled === null) {
+    if (opts.halt()) {
+      throw new Error("halted during Neurosity login");
+    }
+    if (opts.now() >= deadline) {
+      await opts.onTimeout?.();
+      throw new Error(`Neurosity login timed out after ${opts.timeoutMs}ms`);
+    }
+    await opts.maybeHeartbeat("degraded");
+    await opts.sleep(200);
+  }
+  if (settled === null) {
+    throw new Error("Neurosity login did not settle");
+  }
+  if (settled.status === "err") {
+    throw settled.error;
+  }
 }
 
 export function convertEpoch(
@@ -357,6 +504,7 @@ async function consumeLiveStreams(opts: {
   nextSeq: () => number;
   maybeHeartbeat: (status: string) => Promise<void>;
   onEpoch: (epoch: CrownEpoch) => Promise<void>;
+  onIdle?: () => Promise<void>;
 }): Promise<void> {
   let active = true;
   const accelTask = drainIterable(opts.client.accelerometer(), opts.halt, () => active, (sample) => {
@@ -367,7 +515,13 @@ async function consumeLiveStreams(opts: {
     await opts.maybeHeartbeat("healthy");
   });
   const heartbeatTask = (async () => {
+    const waitingSince = Date.now();
+    let idleNotified = false;
     while (active && !opts.halt()) {
+      if (!idleNotified && Date.now() - waitingSince >= 8000) {
+        idleNotified = true;
+        await opts.onIdle?.();
+      }
       await opts.maybeHeartbeat("healthy");
       await defaultSleep(200);
     }

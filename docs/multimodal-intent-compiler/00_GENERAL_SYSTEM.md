@@ -57,8 +57,7 @@ flowchart LR
 
 ### Languages
 
-- Python 3.12: event hub, EMG, audio, vision, fusion, safety, simulator, storage, API.
-- TypeScript/Node.js: Neurosity Crown adapter because the official SDK is JavaScript-first.
+- Python 3.12: event hub, Crown EEG (BrainFlow OSC), EMG, audio, vision, fusion, safety, simulator, storage, API.
 - TypeScript/Next.js: developer console.
 
 ### Local transport

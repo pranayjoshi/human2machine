@@ -7,6 +7,10 @@ from pathlib import Path
 
 from intent_runtime.config import load_stacked_config
 
+from vision_adapter.protobuf_compat import patch_protobuf_get_prototype
+
+patch_protobuf_get_prototype()
+
 from vision_adapter.camera import LatestFrameCamera, VisionHardwareRuntime, list_cameras
 from vision_adapter.color_detector import DEFAULT_CATALOG
 from vision_adapter.mock import VisionMockRuntime
@@ -117,6 +121,7 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
                 catalog=catalog or [dict(row) for row in DEFAULT_CATALOG],
                 pointing_confidence_min=float(vision_cfg.get("pointing_confidence_min", 0.55)),
                 publish_hz=float(vision_cfg.get("publish_hz", 12)),
+                preview_path=find_repo_root() / "data" / "runtime" / "vision_preview.jpg",
             )
 
         started = time.monotonic()

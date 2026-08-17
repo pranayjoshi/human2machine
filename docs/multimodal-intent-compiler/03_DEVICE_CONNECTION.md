@@ -30,7 +30,7 @@ Grant permissions only when macOS prompts:
 |---|---|---|
 | Microphone | Terminal / VS Code / audio adapter | Voice commands |
 | Camera | Terminal / VS Code / vision adapter | Tabletop objects and pointing |
-| Local Network | Crown adapter (Node) | Neurosity Wi-Fi stream |
+| Local Network | Crown adapter (Python) | Neurosity Wi-Fi stream |
 | Bluetooth | Ganglion BLE mode only | Optional; USB dongle is the default |
 
 Do not disable macOS security controls.
@@ -52,25 +52,21 @@ These must be free on localhost:
 
 ## 3. Neurosity Crown (EEG, shadow-only)
 
+Hardware uses **BrainFlow OSC broadcast**. The Crown does **not** take a unicast `--ip`. BrainFlow binds UDP **9000** on this Mac and waits for OSC `*raw` packets.
+
+```bash
+python -m crown_adapter.main --hardware
+```
+
+Enable OSC on the Crown (Neurosity Developer Console → device settings → Open Sound Control). Email/password cloud login is not used. `Crown-995` is the nickname for logs; BrainFlow does not need it when only one Crown is on the LAN.
+
 ### Physical
 
 1. Charge the Crown and wear it per Neurosity's fitting guide.
 2. Update Crown OS through the official app.
-3. Claim the device in the [Neurosity Developer Console](https://console.neurosity.co/).
-4. Put the Crown and the Mac on the same reliable Wi-Fi network.
-5. Confirm the official Neurosity sample receives `brainwaves` and accelerometer events before using this repo.
-
-### Credentials
-
-Edit ignored `.env.local` (never commit it):
-
-```text
-NEUROSITY_EMAIL=you@example.com
-NEUROSITY_PASSWORD=...
-NEUROSITY_DEVICE_ID=...
-```
-
-If more than one Crown is on the account, `NEUROSITY_DEVICE_ID` is required.
+3. Put the Crown and the Mac on the same Wi-Fi network.
+4. Enable OSC as above.
+5. Close the Neurosity app / console.neurosity.co if they hold the stream.
 
 ### Config
 
@@ -81,27 +77,37 @@ devices:
   crown:
     enabled: true
     mock: false
+    ip_address: null
+    ip_port: 9000
+    device_id: "Crown-995"
 ```
 
 `configs/modalities.yaml` already sets `crown.shadow_only: true`. Do not change that for the MVP.
 
+Print the resolved OSC target:
+
+```bash
+python -m crown_adapter.main --hardware --list-devices
+```
+
 ### Run
 
 ```bash
-set -a && source .env.local && set +a
-pnpm --filter @intent/crown-adapter start -- --hardware
+python -m crown_adapter.main --hardware
 ```
 
-Expected events: `biosignal.chunk` (8 channels, 256 Hz, 16 samples), `motion.chunk`, `data.quality`, `device.status`, `service.heartbeat`. Quality drops when the headset moves.
+Or rely on `configs/local.yaml` and `just run-hardware --confirm`.
+
+Expected events: `biosignal.chunk` (8 channels, 256 Hz, 16 samples), `data.quality`, `device.status`, `service.heartbeat`. Quality drops when the headset moves.
 
 ### Troubleshooting
 
 | Symptom | What to do |
 |---|---|
-| Login error | Recheck `.env.local`. Tokens and emails must never appear in logs. |
-| No epochs | Crown offline, wrong Wi-Fi, or stale Crown OS. Use the official app first. |
+| no OSC packets on UDP 9000 | Enable OSC on the Crown. Same Wi-Fi. Close the Neurosity app. Grant Local Network to Terminal/Cursor. `--ip` is not used. |
+| No epochs / adapter stays degraded | Same Wi-Fi, OSC on, then restart `just run-hardware --confirm`. |
 | Adapter retries | Exponential backoff is capped at 30s. `device.status=degraded` is expected during reconnect. Old samples are never replayed as live. |
-| Want mock instead | `pnpm --filter @intent/crown-adapter start -- --mock` |
+| Want mock instead | `python -m crown_adapter.main --mock` |
 
 ## 4. OpenBCI Ganglion (EMG)
 
@@ -109,7 +115,7 @@ Expected events: `biosignal.chunk` (8 channels, 256 Hz, 16 samples), `motion.chu
 
 1. Charge the approved battery **before** applying electrodes. Disconnect charge before wearing.
 2. Map four forearm channels (example: flexor, extensor, pronator, aux). Write the mapping down; IDs stay in config, not in code comments only.
-3. Use a short USB extension for the dongle. Prefer `/dev/cu.*` on macOS.
+3. Use a short USB extension for the dongle, **or** skip the dongle and use native Bluetooth (below). Prefer `/dev/cu.*` on macOS for USB.
 4. Open the OpenBCI GUI and confirm all four channels react to gentle contractions.
 5. Record a one-minute GUI reference file before BrainFlow.
 
@@ -119,7 +125,7 @@ Gestures for the MVP (comfortable, not maximal):
 - `confirm` — gentle wrist flexion
 - `cancel` — gentle wrist extension
 
-### Discover the serial port
+### Discover the serial port (USB dongle)
 
 ```bash
 python -m ganglion_adapter.main --hardware --list-devices
@@ -132,8 +138,34 @@ devices:
   ganglion:
     enabled: true
     mock: false
+    transport: usb_dongle
     serial_port: /dev/cu.usbserial-XXXX
 ```
+
+### Native Bluetooth (no dongle)
+
+macOS Bluetooth permission is required (Terminal / Cursor). Power the Ganglion so the LED blinks, then:
+
+```bash
+python -m ganglion_adapter.main --hardware --list-devices
+python -m ganglion_adapter.main --hardware --ble
+```
+
+Or persist it in `configs/local.yaml`:
+
+```yaml
+devices:
+  ganglion:
+    enabled: true
+    mock: false
+    transport: ble
+    serial_port: null
+    mac_address: null          # optional; empty = autodiscover Ganglion/Simblee
+    serial_number: null        # optional advertised name
+    timeout_seconds: 15
+```
+
+BrainFlow scans for an advertised name starting with `Ganglion` or `Simblee`. Set `mac_address` only if you have more than one board or autodiscover fails. On macOS the address may look like a UUID, not `AA:BB:CC:DD:EE:FF`.
 
 ### Run
 
@@ -147,16 +179,27 @@ A single classified window never becomes a gesture. Live inference uses dwell, h
 
 ### Calibration (UI)
 
-1. Open `/calibrate/emg` in the developer console.
-2. 30s rest, 20 confirm, 20 cancel, then a randomized block.
-3. Run the 10-minute false-trigger rest trial before trusting EMG in a demo.
-4. Promoted models live under `models/emg/` with `metadata.json`. Never commit real biometric recordings.
+1. Open `/calibrate/emg` in the developer console while the Ganglion adapter is streaming.
+2. 30s rest, 20 confirm (wrist flexion), 20 cancel (wrist extension), then a randomized held-out block.
+3. Train. The trainer fits logistic regression, LDA, and a small forest on grouped recording blocks — overlapping windows never leak into the test split.
+4. Run the 10-minute false-trigger rest trial before trusting EMG in a demo. Mock/CI measures the same rate on a 60-second rest stream and scales to 10 minutes.
+5. Promote only if cross-block balanced accuracy is at least 90% and the false-trigger trial has been measured. The live adapter reloads `models/emg/current.json`.
+
+CI gate (synthetic, no board):
+
+```bash
+just eval-emg
+pytest tests/end_to_end/test_milestone3_emg.py
+```
+
+Promoted models live under `models/emg/` with `model.joblib`, `metadata.json`, `feature_config.yaml`, `metrics.json`, and `training_session_ids.json`. Never commit real biometric recordings.
 
 ### Troubleshooting
 
 | Symptom | What to do |
 |---|---|
-| Board not listed | Unplug/replug dongle, try another USB port, confirm OpenBCI GUI first. |
+| Board not listed | **Quit OpenBCI GUI first** — it holds the BLE connection so Simblee stops advertising. Grant Bluetooth to Terminal. Re-run `python -m ganglion_adapter.main --hardware --list-devices`. USB: unplug/replug dongle. |
+| GUI sees Simblee, this repo does not | Same exclusive-link issue. Disconnect/close the GUI, keep the board advertising, then list-devices (it now BLE-scans, not `system_profiler`). |
 | Flat channels | Re-seat electrodes, check gel/skin, cable strain. |
 | Line noise | Keep 60 Hz notch; move away from chargers and the laptop PSU. |
 | Stale gesture after unplug | Adapter must emit `UNKNOWN` / degraded status, never the last confirm. |
@@ -197,7 +240,16 @@ python -m audio_adapter.main --hardware
 
 The adapter captures locally, runs VAD, transcribes locally when a Whisper backend is installed (MLX Whisper on Apple Silicon, otherwise a CPU Whisper if present), then applies the deterministic grammar parser. Partial transcripts have `is_final=false` and cannot commit.
 
-If no ASR model is installed, use the operator phrase box in the UI or:
+If no ASR model is installed, install local Whisper on Apple Silicon:
+
+```bash
+python -m pip install -e ".[audio-mlx]"
+# or: python -m pip install -r requirements-audio-mlx.txt
+```
+
+Then restart the audio adapter. The first utterance downloads `whisper-tiny.en`. Microphone permission must be granted to Terminal / Cursor.
+
+If ASR is still unavailable, use the operator phrase box or:
 
 ```bash
 python -m audio_adapter.main --hardware --phrase "give me the blue block"
@@ -252,7 +304,7 @@ python -m vision_adapter.main --hardware
 
 Calibrate at `/calibrate/vision`: camera, table homography, marker IDs, pointing test. A calibration saved at a different resolution must fail instead of silently warping.
 
-Privacy: default is features-only (no MP4). Research recording requires explicit session consent.
+The live session page shows a JPEG preview (downscaled, not recorded) plus object overlays. Raw video is not stored unless the session was started with `record_video=true`.
 
 ### Troubleshooting
 
@@ -334,7 +386,7 @@ pytest tests/end_to_end/test_milestone1_soak.py
 | 0 | Synthetic closed loop, mock adapters, console | Implemented; `pytest tests/end_to_end` |
 | 1 | Crown + Ganglion concurrent recording | Done in mock/CI (`pytest tests/end_to_end/test_milestone1_soak.py`); hardware 20-minute soak is documented above |
 | 2 | Constrained voice + four-object vision | Hardware paths implemented; accuracy gates are manual |
-| 3 | Personalized EMG | Calibration UI + training hook; promote only after held-out metrics |
+| 3 | Personalized EMG | Done in mock/CI (`pytest tests/end_to_end/test_milestone3_emg.py`); hardware calibration is `/calibrate/emg` |
 | 4 | Closed-loop multimodal demo | Mock demo + live UI; 100-trial eval is operator-run |
 | 5 | EEG shadow experiment | Acquisition + quality only; live weight remains 0 |
 | 6 | YC packaging | Launcher and this handbook; remaining polish tracked in README |

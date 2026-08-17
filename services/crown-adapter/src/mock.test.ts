@@ -111,6 +111,13 @@ test("parseArgs accepts fast mode and disconnect-after-ms", () => {
   assert.equal(opts.fast, true);
   assert.equal(opts.disconnectAfterMs, 250);
   assert.equal(opts.durationMs, 500);
+  assert.equal(opts.listDevices, false);
+});
+
+test("parseArgs list-devices implies hardware mode", () => {
+  const opts = parseArgs(["--list-devices"]);
+  assert.equal(opts.listDevices, true);
+  assert.equal(opts.mock, false);
 });
 
 function collectFrom(gen: CrownMockGenerator, chunks: number) {

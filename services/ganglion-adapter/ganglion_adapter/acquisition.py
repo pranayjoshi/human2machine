@@ -11,7 +11,11 @@ from numpy.typing import NDArray
 
 CHANNEL_NAMES = ["emg_ch1", "emg_ch2", "emg_ch3", "emg_ch4"]
 GANGLION_BOARD_ID = 1
+GANGLION_NATIVE_BOARD_ID = 46
 EEG_CHANNEL_COUNT = 4
+TRANSPORT_USB = "usb_dongle"
+TRANSPORT_BLE = "ble"
+DEFAULT_BLE_TIMEOUT_S = 15
 
 
 @dataclass
@@ -91,6 +95,62 @@ def board_timestamp_to_ns(value: float) -> int | None:
     return int(value * 1_000_000_000)
 
 
+def normalize_transport(value: str | None) -> str:
+    raw = (value or TRANSPORT_USB).strip().lower().replace("-", "_")
+    if raw in {"ble", "bluetooth", "native", "ganglion_native"}:
+        return TRANSPORT_BLE
+    if raw in {"usb", "usb_dongle", "serial", "dongle", "bled112"}:
+        return TRANSPORT_USB
+    raise ValueError(f"unknown ganglion transport {value!r}; use usb_dongle or ble")
+
+
+@dataclass
+class GanglionConnection:
+    transport: str = TRANSPORT_USB
+    serial_port: str | None = None
+    mac_address: str | None = None
+    serial_number: str | None = None
+    timeout_seconds: int = DEFAULT_BLE_TIMEOUT_S
+
+    @property
+    def capture_mode(self) -> str:
+        return "ble" if self.transport == TRANSPORT_BLE else "usb_dongle"
+
+    @property
+    def board_id(self) -> int:
+        return GANGLION_NATIVE_BOARD_ID if self.transport == TRANSPORT_BLE else GANGLION_BOARD_ID
+
+    def validate(self) -> None:
+        if self.transport == TRANSPORT_USB and not self.serial_port:
+            raise RuntimeError(
+                "Ganglion serial_port is not set; pass --port or devices.ganglion.serial_port"
+            )
+
+
+def connection_from_mapping(
+    devices_ganglion: dict[str, Any] | None = None,
+    *,
+    transport: str | None = None,
+    serial_port: str | None = None,
+    mac_address: str | None = None,
+    serial_number: str | None = None,
+    timeout_seconds: int | None = None,
+) -> GanglionConnection:
+    cfg = devices_ganglion or {}
+    chosen_transport = normalize_transport(transport or cfg.get("transport"))
+    timeout = timeout_seconds
+    if timeout is None:
+        raw_timeout = cfg.get("timeout_seconds", DEFAULT_BLE_TIMEOUT_S)
+        timeout = int(raw_timeout) if raw_timeout is not None else DEFAULT_BLE_TIMEOUT_S
+    return GanglionConnection(
+        transport=chosen_transport,
+        serial_port=serial_port if serial_port is not None else cfg.get("serial_port"),
+        mac_address=mac_address if mac_address is not None else cfg.get("mac_address"),
+        serial_number=serial_number if serial_number is not None else cfg.get("serial_number"),
+        timeout_seconds=max(1, timeout),
+    )
+
+
 class BrainFlowAcquisition:
     """Live Ganglion session via BrainFlow. Tests inject a fake BoardShim."""
 
@@ -98,6 +158,10 @@ class BrainFlowAcquisition:
         self,
         serial_port: str | None = None,
         *,
+        transport: str | None = None,
+        mac_address: str | None = None,
+        serial_number: str | None = None,
+        timeout_seconds: int = DEFAULT_BLE_TIMEOUT_S,
         sample_rate_hz: float = 200.0,
         n_channels: int = EEG_CHANNEL_COUNT,
         chunk_ms: float = 80.0,
@@ -106,8 +170,16 @@ class BrainFlowAcquisition:
         eeg_channels: list[int] | None = None,
         timestamp_channel: int | None = None,
         poll_s: float = 0.05,
+        connection: GanglionConnection | None = None,
     ) -> None:
-        self.serial_port = serial_port
+        self.connection = connection or GanglionConnection(
+            transport=normalize_transport(transport),
+            serial_port=serial_port,
+            mac_address=mac_address,
+            serial_number=serial_number,
+            timeout_seconds=timeout_seconds,
+        )
+        self.serial_port = self.connection.serial_port
         self.sample_rate_hz = sample_rate_hz
         self.n_channels = n_channels
         self.chunk_ms = chunk_ms
@@ -116,7 +188,7 @@ class BrainFlowAcquisition:
         self.packet_loss_count = 0
         self.last_receive_ns: int | None = None
         self._board_shim = board_shim
-        self._board_id = board_id
+        self._board_id = board_id if board_id is not None else self.connection.board_id
         self._eeg_channels = eeg_channels
         self._timestamp_channel = timestamp_channel
         self._board: Any | None = None
@@ -126,11 +198,17 @@ class BrainFlowAcquisition:
         self._error: str | None = None
 
     def start(self) -> None:
-        if not self.serial_port:
-            raise RuntimeError("Ganglion serial_port is not set")
+        self.connection.validate()
         board_shim, board_id, params_cls = self._resolve_brainflow()
         params = params_cls()
-        params.serial_port = self.serial_port
+        if self.connection.transport == TRANSPORT_USB:
+            params.serial_port = self.connection.serial_port
+        else:
+            if self.connection.mac_address:
+                params.mac_address = str(self.connection.mac_address)
+            if self.connection.serial_number:
+                params.serial_number = str(self.connection.serial_number)
+            params.timeout = int(self.connection.timeout_seconds)
         self._board = board_shim(board_id, params)
         try:
             self._board.prepare_session()
@@ -237,7 +315,9 @@ class BrainFlowAcquisition:
             from brainflow.board_shim import BoardIds, BoardShim, BrainFlowInputParams
         except ImportError as exc:
             raise RuntimeError("brainflow is not installed") from exc
-        board_id = int(BoardIds.GANGLION_BOARD) if self._board_id is None else int(self._board_id)
+        board_id = (
+            int(self._board_id) if self._board_id is not None else int(BoardIds.GANGLION_BOARD)
+        )
         return BoardShim, board_id, BrainFlowInputParams
 
     def _safe_release(self) -> None:
@@ -261,3 +341,6 @@ class BrainFlowAcquisition:
 class _SessionParams:
     def __init__(self) -> None:
         self.serial_port: str | None = None
+        self.mac_address: str | None = None
+        self.serial_number: str | None = None
+        self.timeout: int = 0

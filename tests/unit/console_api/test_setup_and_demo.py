@@ -40,6 +40,8 @@ def test_setup_shape(client: TestClient) -> None:
     assert isinstance(body["crown"]["env_vars_present"], bool)
     assert body["crown"]["shadow_only"] is True
     assert isinstance(body["ganglion"]["serial_port_set"], bool)
+    assert body["ganglion"]["transport"] in {"usb_dongle", "ble"}
+    assert isinstance(body["ganglion"]["ble_configured"], bool)
     assert "camera_index" in body["vision"]
     assert isinstance(body["audio"]["device_name_set"], bool)
     assert body["simulator"]["mode"]
@@ -95,9 +97,47 @@ def test_emg_calibration_stub(client: TestClient) -> None:
     assert body["phase"] == "rest"
     assert body["eeg_used"] is False
     assert body["training_job"] is None
+    assert body["class_balance"]["rest"] > 0
     status = client.get("/api/calibrate/emg/status")
     assert status.json()["phase"] == "rest"
     nxt = client.post("/api/calibrate/emg/next")
     assert nxt.json()["phase"] == "confirm"
     recorded = client.post("/api/calibrate/emg/record")
     assert recorded.json()["counts"]["confirm"] == 1
+
+
+def test_emg_calibration_train_and_promote(tmp_path) -> None:
+    from console_api.app import create_app
+
+    app = create_app(mock=True)
+    with TestClient(app) as client:
+        runtime = app.state.runtime
+        runtime.emg_calibration.models_dir = tmp_path
+        runtime.emg_calibration.rest_seconds = 2
+        runtime.emg_calibration.gesture_repetitions = 6
+        runtime.emg_calibration.random_repetitions = 6
+        runtime.emg_calibration.false_trigger_seconds = 8
+        started = client.post("/api/calibrate/emg/start")
+        assert started.status_code == 200
+        assert client.post("/api/calibrate/emg/next").json()["phase"] == "confirm"
+        for _ in range(6):
+            client.post("/api/calibrate/emg/record")
+        assert client.post("/api/calibrate/emg/next").json()["phase"] == "cancel"
+        for _ in range(6):
+            client.post("/api/calibrate/emg/record")
+        assert client.post("/api/calibrate/emg/next").json()["phase"] == "random"
+        for _ in range(6):
+            client.post("/api/calibrate/emg/record")
+        trained = client.post("/api/calibrate/emg/train")
+        assert trained.status_code == 200, trained.text
+        body = trained.json()
+        assert body["training_job"] == "complete"
+        assert body["metrics"]["cross_block_balanced_accuracy"] >= 0.9
+        assert body["candidate_model_id"]
+        trial = client.post("/api/calibrate/emg/false-trigger")
+        assert trial.status_code == 200, trial.text
+        assert trial.json()["false_trigger"]["n_windows"] > 0
+        promoted = client.post("/api/calibrate/emg/promote")
+        assert promoted.status_code == 200, promoted.text
+        assert promoted.json()["phase"] == "complete"
+        assert (tmp_path / "current.json").exists()

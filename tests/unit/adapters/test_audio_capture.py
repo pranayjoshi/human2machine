@@ -7,6 +7,7 @@ from audio_adapter.capture import (
     AsrResult,
     AudioHardwareRuntime,
     RingBuffer,
+    describe_asr,
     event_contains_raw_audio,
     extract_asr_confidence,
     segment_utterances,
@@ -240,6 +241,18 @@ def test_ring_overflow_increments_and_flags_quality() -> None:
     assert "overflow" in quality[0].payload["flags"]
 
 
+def test_heartbeat_is_healthy_when_mic_is_live_even_after_overflow() -> None:
+    runtime = AudioHardwareRuntime(resolve_backend=False, asr=lambda _a, _sr: "stop")
+    runtime.ring = RingBuffer(sample_rate_hz=16_000, seconds=0.05)
+    runtime.ring.push(np.ones(runtime.ring.capacity + 32, dtype=np.float32), 3)
+    event = runtime.heartbeat(1.0, dropped=0)
+    assert event.payload["status"] == "healthy"
+    assert event.payload["error_count"] >= 1
+    runtime._stream_failed = True
+    failed = runtime.heartbeat(2.0, dropped=0)
+    assert failed.payload["status"] == "degraded"
+
+
 def test_long_tone_is_closed_at_max_utterance_ms() -> None:
     sr = 16_000
     max_ms = 400
@@ -264,6 +277,44 @@ def test_default_path_discards_pcm_after_parse() -> None:
     assert runtime.session_pcm == []
     assert events
     assert all(not event_contains_raw_audio(event) for event in events)
+
+
+def test_empty_asr_is_visible_as_device_status() -> None:
+    runtime = AudioHardwareRuntime(
+        resolve_backend=False,
+        asr=lambda _audio, _sr: "",
+        use_webrtc=False,
+    )
+    events = runtime.ingest_block(_tone_and_silence(), 1_000_000_000)
+    statuses = [event for event in events if event.event_type == "device.status"]
+    assert any("ASR returned no words" in str(event.payload.get("detail", "")) for event in statuses)
+    assert not [event for event in events if event.event_type == "audio.intent_candidate"]
+
+
+def test_silent_microphone_is_reported_by_watchdog() -> None:
+    runtime = AudioHardwareRuntime(
+        resolve_backend=False,
+        asr=lambda _audio, _sr: "stop",
+        stream_factory=FakeStream,
+        use_webrtc=False,
+    )
+    runtime.start()
+    zeros = np.zeros((320, 1), dtype=np.float32)
+    for _ in range(8):
+        runtime._on_audio(zeros, 320, None, None)
+    runtime._capture_started_mono = time.monotonic() - 3.0
+    events = runtime.poll()
+    statuses = [event for event in events if event.event_type == "device.status"]
+    assert any("silent" in str(event.payload.get("detail", "")).lower() for event in statuses)
+    beat = runtime.heartbeat(3.0, dropped=0)
+    assert beat.payload["status"] == "degraded"
+    assert beat.payload["rms"] == 0.0
+    assert beat.payload["asr_backend"] == "local-asr"
+
+
+def test_describe_asr_names_mlx_wrapper() -> None:
+    assert describe_asr(None) is None
+    assert describe_asr(lambda _audio, _sr: "stop") == "local-asr"
 
 
 def test_research_recording_keeps_pcm_in_memory_only() -> None:

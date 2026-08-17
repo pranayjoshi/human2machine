@@ -206,6 +206,9 @@ def head_direction_from_pose(
 def maybe_create_face_landmarker() -> Any | None:
     """Optional MediaPipe Face Mesh. Returns None when the package is missing."""
     try:
+        from vision_adapter.protobuf_compat import patch_protobuf_get_prototype
+
+        patch_protobuf_get_prototype()
         import mediapipe as mp
     except Exception:
         return None

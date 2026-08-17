@@ -28,7 +28,7 @@ from intent_contracts.validation import parse_unnormalized_event
 from intent_runtime.config import load_stacked_config
 from intent_runtime.zmq_bus import AdapterPush, NormalizedSubscriber
 
-from console_api.calibrate import EmgCalibrationStub
+from console_api.calibrate import EmgCalibrationSession
 from console_api.catalog import SERVICE_CATALOG, resolve_service_id
 from console_api.control_plane import ControlPlane, ControlTransport
 from console_api.demo import load_scenario_spec, materialize_demo_events
@@ -37,6 +37,7 @@ from console_api.device_setup import DOC_FILES, public_setup
 LOGGER = logging.getLogger("console_api")
 
 SECRET_KEY_PARTS = ("password", "token", "secret", "credential", "email", "api_key", "auth")
+ASR_UNAVAILABLE = "asr_unavailable"
 SEMANTIC_EVENT_TYPES = {
     EventType.MODALITY_FEATURE,
     EventType.VISION_OBJECTS,
@@ -67,6 +68,30 @@ CLIENT_QUEUE_MAX = 128
 TIMELINE_MAX = 40
 MIN_FREE_GB = 1.0
 SEQUENCE_ANOMALY_FLAGS = frozenset({"sequence_gap", "sequence_regression", "timestamp_gap"})
+
+
+def _audio_detail_allows_session(detail: str) -> bool:
+    text = detail.strip()
+    if text == ASR_UNAVAILABLE:
+        return True
+    lowered = text.lower()
+    return lowered.startswith("microphone capture started") or "silent" in lowered
+
+
+def _check_allows_session(check: dict[str, Any]) -> bool:
+    """Required services must be healthy, except expected audio ASR fallback."""
+    if not check.get("required"):
+        return True
+    status = str(check.get("status") or "")
+    if status in {DeviceHealth.HEALTHY, "healthy"}:
+        return True
+    if (
+        check.get("id") == "audio-adapter"
+        and status in {DeviceHealth.DEGRADED, "degraded"}
+        and _audio_detail_allows_session(str(check.get("detail") or ""))
+    ):
+        return True
+    return False
 
 
 def find_repo_root() -> Path:
@@ -168,7 +193,12 @@ class ConsoleRuntime:
         }
         self._last_plot_emit = 0.0
         self._mock_t = 0.0
-        self.emg_calibration = EmgCalibrationStub()
+        self.emg_calibration = EmgCalibrationSession(
+            mock=mock,
+            models_dir=self.root / "models" / "emg",
+            config=ganglion_cfg,
+            repo_root=self.root,
+        )
         self.vision_calibration_complete = False
         self.eeg_calibration_acknowledged = False
 
@@ -471,6 +501,9 @@ class ConsoleRuntime:
         service["last_data_age_ms"] = payload.get("last_data_age_ms")
         reported = str(payload.get("status") or DeviceHealth.HEALTHY)
         service["reported_status"] = reported
+        for key in ("rms", "peak", "listening", "asr_backend"):
+            if key in payload:
+                service[key] = payload.get(key)
         stream = self._biosignal_stream_key(source, None, None)
         if stream is not None and payload.get("last_data_age_ms") is not None:
             self.biosignals[stream]["last_data_age_ms"] = payload.get("last_data_age_ms")
@@ -536,6 +569,16 @@ class ConsoleRuntime:
                 except (TypeError, ValueError):
                     pass
             health["last_chunk_mono"] = time.monotonic()
+            if stream == "emg":
+                try:
+                    self.emg_calibration.ingest_chunk(
+                        samples,
+                        sample_rate_hz=float(payload.get("sample_rate_hz") or 200),
+                        source_time_ns=raw.get("source_time_ns"),
+                        quality=float(raw.get("quality") or 0.0),
+                    )
+                except Exception:
+                    LOGGER.debug("emg calibration ingest failed", exc_info=True)
         target = None
         if stream == "eeg" or modality == "eeg" or "crown" in source:
             target = self.eeg
@@ -710,6 +753,11 @@ class ConsoleRuntime:
                     "error_count": service.get("error_count", 0),
                     "last_data_age_ms": service.get("last_data_age_ms"),
                     "recovery": item["recovery"],
+                    "detail": service.get("detail"),
+                    "rms": service.get("rms"),
+                    "peak": service.get("peak"),
+                    "listening": service.get("listening"),
+                    "asr_backend": service.get("asr_backend"),
                 }
             )
         return views
@@ -750,12 +798,24 @@ class ConsoleRuntime:
         checks: list[dict[str, Any]] = []
         for view in self.service_views():
             age = view["last_heartbeat_age_ms"]
+            detail = view.get("detail")
             if view["status"] == DeviceHealth.HEALTHY:
                 age_s = 0 if age is None else round(age / 1000.0, 2)
                 message = f"Online. Last heartbeat {age_s}s ago."
                 recovery = None
             elif view["status"] == DeviceHealth.DEGRADED:
-                message = f"Degraded after missed heartbeats ({view['missed_heartbeats']})."
+                if str(detail or "") == "asr_unavailable":
+                    message = (
+                        "Microphone is live, but local ASR is not installed. "
+                        "Start a session anyway and use the operator phrase box, "
+                        "or pip install -e '.[audio-mlx]'."
+                    )
+                elif detail:
+                    message = f"Degraded: {detail}."
+                else:
+                    message = (
+                        f"Degraded after missed heartbeats ({view['missed_heartbeats']})."
+                    )
                 recovery = view["recovery"]
             else:
                 message = "Offline or never seen."
@@ -775,15 +835,12 @@ class ConsoleRuntime:
                     "last_event_age_ms": age,
                     "message": message,
                     "recovery": recovery,
+                    "detail": detail,
                 }
             )
         storage_check = self._recorder_storage_check()
         checks.append(storage_check)
-        ready = all(
-            check["status"] in {DeviceHealth.HEALTHY, "healthy"}
-            for check in checks
-            if check.get("required")
-        )
+        ready = all(_check_allows_session(check) for check in checks)
         return PreflightResult(ready=ready, checks=checks)
 
     def _recorder_storage_check(self) -> dict[str, Any]:
@@ -827,6 +884,7 @@ class ConsoleRuntime:
                 "active_trial_id": self.active_trial_id,
                 "services": self.service_views(),
                 "vision": self.vision,
+                "vision_preview": self._vision_preview_status(),
                 "audio": self.audio,
                 "intent": self.intent,
                 "safety": self.safety,
@@ -841,6 +899,39 @@ class ConsoleRuntime:
                 },
                 "server_time_ms": int(time.time() * 1000),
             }
+
+    def vision_preview_path(self) -> Path:
+        return self.root / "data" / "runtime" / "vision_preview.jpg"
+
+    def _vision_preview_status(self) -> dict[str, Any]:
+        jpeg_path = self.vision_preview_path()
+        meta_path = jpeg_path.with_suffix(".json")
+        exists = jpeg_path.exists()
+        width, height = 1280, 720
+        updated_at_s = jpeg_path.stat().st_mtime if exists else None
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text())
+                width = int(meta.get("width") or width)
+                height = int(meta.get("height") or height)
+                updated_at_s = float(meta.get("updated_at_s") or updated_at_s or 0.0)
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                pass
+        age_s = None if updated_at_s is None else max(0.0, time.time() - float(updated_at_s))
+        available = bool(exists) and (age_s is None or age_s <= 2.5)
+        return {
+            "available": available,
+            "width": width,
+            "height": height,
+            "age_s": None if age_s is None else round(age_s, 3),
+        }
+
+    def vision_preview(self) -> tuple[Path | None, dict[str, Any] | None]:
+        path = self.vision_preview_path()
+        status = self._vision_preview_status()
+        if not status.get("available"):
+            return None, status
+        return path, status
 
     def _biosignal_snapshot(self, stream: str) -> dict[str, Any]:
         health = self.biosignals[stream]
@@ -1235,6 +1326,23 @@ class ConsoleRuntime:
 
     def calibrate_emg_record(self) -> dict[str, Any]:
         return self.emg_calibration.record()
+
+    def calibrate_emg_train(self) -> dict[str, Any]:
+        status = self.emg_calibration.train()
+        self._emit_calibration_instruction(status.get("instruction") or "Training EMG model.")
+        return status
+
+    def calibrate_emg_false_trigger(self) -> dict[str, Any]:
+        status = self.emg_calibration.run_false_trigger()
+        self._emit_calibration_instruction(status.get("instruction") or "False-trigger trial.")
+        return status
+
+    def calibrate_emg_promote(self) -> dict[str, Any]:
+        status = self.emg_calibration.promote()
+        self._emit_calibration_instruction(
+            f"Promoted EMG model {status.get('promoted_model_id') or ''}.".strip()
+        )
+        return status
 
     def _emit_calibration_instruction(self, instruction: str) -> None:
         event = self._make_event(

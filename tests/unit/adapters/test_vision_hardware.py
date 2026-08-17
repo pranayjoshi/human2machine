@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pytest
 import yaml
 from intent_contracts.validation import parse_unnormalized_event
@@ -23,61 +22,12 @@ from vision_adapter.detector import ColorArucoDetector
 from vision_adapter.mock import FreezeDetector
 from vision_adapter.tracker import ObjectTracker, stale_ms_from_config
 
-EXPECTED_IDS = {"object_blue_1", "object_red_1", "object_green_1", "object_yellow_1"}
-
-SQUARES = {
-    "blue": ((20, 20), (90, 90), (255, 0, 0)),
-    "red": ((200, 20), (270, 90), (0, 0, 255)),
-    "green": ((20, 150), (90, 220), (0, 255, 0)),
-    "yellow": ((200, 150), (270, 220), (0, 255, 255)),
-}
-
-
-def four_color_image(
-    width: int = 320,
-    height: int = 240,
-    *,
-    dx: int = 0,
-    dy: int = 0,
-    omit: str | tuple[str, ...] | None = None,
-) -> np.ndarray:
-    image = np.zeros((height, width, 3), dtype=np.uint8)
-    skipped = omit if isinstance(omit, tuple) else ((omit,) if omit else ())
-    for name, ((x0, y0), (x1, y1), bgr) in SQUARES.items():
-        if name in skipped:
-            continue
-        image[y0 + dy : y1 + dy, x0 + dx : x1 + dx] = bgr
-    return image
-
-
-def aruco_four_markers_image(
-    width: int = 320,
-    height: int = 240,
-    marker_size: int = 70,
-) -> np.ndarray:
-    import cv2
-
-    image = np.full((height, width, 3), 255, dtype=np.uint8)
-    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-    placements = ((20, 20, 0), (200, 20, 1), (20, 150, 2), (200, 150, 3))
-    for x, y, marker_id in placements:
-        if hasattr(cv2.aruco, "generateImageMarker"):
-            marker = cv2.aruco.generateImageMarker(dictionary, marker_id, marker_size)
-        else:
-            marker = cv2.aruco.drawMarker(dictionary, marker_id, marker_size)
-        if marker.ndim == 2:
-            marker = cv2.cvtColor(marker, cv2.COLOR_GRAY2BGR)
-        image[y : y + marker_size, x : x + marker_size] = marker
-    return image
-
-
-class FakeCamera:
-    def __init__(self, frame: np.ndarray, source_time_ns: int = 1_000_000) -> None:
-        self.frame = frame
-        self.source_time_ns = source_time_ns
-
-    def latest(self):
-        return self.frame, self.source_time_ns, 0
+from tests.helpers.vision_images import (
+    EXPECTED_IDS,
+    FakeCamera,
+    aruco_four_markers_image,
+    four_color_image,
+)
 
 
 def test_color_detector_finds_four_saturated_squares() -> None:
@@ -168,6 +118,17 @@ def test_object_stale_ms_matches_modalities_yaml() -> None:
     camera = FakeCamera(four_color_image())
     runtime = VisionHardwareRuntime(camera, hands=None, config=config)
     assert runtime.object_stale_ms == 400.0
+
+
+def test_hardware_runtime_writes_jpeg_preview(tmp_path: Path) -> None:
+    preview = tmp_path / "vision_preview.jpg"
+    camera = FakeCamera(four_color_image())
+    runtime = VisionHardwareRuntime(camera, hands=None, preview_path=preview, preview_hz=30)
+    runtime.render_frame(monotonic_ns=0)
+    assert preview.exists()
+    assert preview.stat().st_size > 100
+    meta = preview.with_suffix(".json")
+    assert meta.exists()
 
 
 def test_calibration_resolution_mismatch_raises(tmp_path: Path) -> None:

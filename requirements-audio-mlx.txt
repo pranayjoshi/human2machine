@@ -1,0 +1,18 @@
+# Local microphone ASR (Apple Silicon). Install from the repo root:
+#   python -m pip install -r requirements-audio-mlx.txt
+# or:
+#   python -m pip install -e ".[audio-mlx]"
+#
+# numpy and scipy are already core project deps; listed here so this file
+# can be installed on its own.
+
+huggingface-hub>=0.24
+more-itertools>=10
+numba>=0.60
+numpy>=2.0
+scipy>=1.14
+tiktoken>=0.7
+torch>=2.4
+tqdm>=4.66
+mlx>=0.32; sys_platform == "darwin"
+mlx-whisper>=0.4; sys_platform == "darwin"

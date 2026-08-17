@@ -5,6 +5,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -20,8 +21,10 @@ PREROLL_MS = 250
 SILENCE_END_MS = 400
 MAX_UTTERANCE_MS = 4000
 FRAME_MS = 20
-ENERGY_THRESHOLD = 0.02
+ENERGY_THRESHOLD = 0.008
 PENDING_BLOCK_LIMIT = 300
+SILENCE_PEAK = 1e-4
+SILENCE_WATCHDOG_S = 2.5
 
 RAW_AUDIO_KEYS = frozenset(
     {
@@ -136,6 +139,10 @@ class EnergyVadSegmenter:
         self._silence_run = 0
         self._in_speech = False
 
+    @property
+    def in_speech(self) -> bool:
+        return self._in_speech
+
     def push_block(
         self, samples: NDArray[np.floating], received_ns: int
     ) -> list[CompletedUtterance]:
@@ -212,16 +219,17 @@ class EnergyVadSegmenter:
         return CompletedUtterance(samples=samples, start_ns=int(start_ns), end_ns=int(end_ns))
 
     def _is_speech(self, frame: NDArray[np.float32]) -> bool:
+        energy = False
+        if frame.size:
+            rms = float(np.sqrt(np.mean(np.square(frame, dtype=np.float64))))
+            energy = rms >= self.energy_threshold
         if self._webrtc is not None and frame.size == self.frame_samples:
             pcm = np.clip(frame * 32768.0, -32768, 32767).astype(np.int16).tobytes()
             try:
-                return bool(self._webrtc.is_speech(pcm, self.sample_rate_hz))
+                return bool(self._webrtc.is_speech(pcm, self.sample_rate_hz)) or energy
             except Exception:
                 pass
-        if frame.size == 0:
-            return False
-        rms = float(np.sqrt(np.mean(np.square(frame, dtype=np.float64))))
-        return rms >= self.energy_threshold
+        return energy
 
 
 def segment_utterances(
@@ -283,18 +291,52 @@ def _asr_from_whisper_result(result: dict[str, Any]) -> AsrResult:
     return AsrResult(transcript=text, confidence=extract_asr_confidence(result))
 
 
+def _transcribe_with_mlx(audio: NDArray[np.floating], sample_rate_hz: int) -> AsrResult:
+    import mlx_whisper
+
+    array = np.asarray(audio, dtype=np.float32).reshape(-1)
+    model = "mlx-community/whisper-tiny"
+    try:
+        result = mlx_whisper.transcribe(array, path_or_hf_repo=model, language="en")
+    except Exception:
+        result = _mlx_transcribe_wav(array, sample_rate_hz, model)
+    if not isinstance(result, dict):
+        return AsrResult(transcript=str(result).strip(), confidence=None)
+    return _asr_from_whisper_result(result)
+
+
+def _mlx_transcribe_wav(
+    audio: NDArray[np.float32], sample_rate_hz: int, model: str
+) -> dict[str, Any]:
+    import tempfile
+    import wave
+
+    import mlx_whisper
+
+    pcm = np.clip(audio * 32767.0, -32768, 32767).astype(np.int16)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
+        path = handle.name
+    try:
+        with wave.open(path, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(int(sample_rate_hz))
+            wav.writeframes(pcm.tobytes())
+        result = mlx_whisper.transcribe(path, path_or_hf_repo=model, language="en")
+        return result if isinstance(result, dict) else {"text": str(result)}
+    finally:
+        Path(path).unlink(missing_ok=True)
+
+
 def resolve_asr() -> Callable[[NDArray[np.floating], int], AsrResult] | None:
     try:
-        import mlx_whisper
+        import mlx_whisper  # noqa: F401
 
-        def _mlx(audio: NDArray[np.floating], sample_rate_hz: int) -> AsrResult:
-            _ = sample_rate_hz
-            result = mlx_whisper.transcribe(np.asarray(audio, dtype=np.float32), language="en")
-            if not isinstance(result, dict):
-                return AsrResult(transcript=str(result).strip(), confidence=None)
-            return _asr_from_whisper_result(result)
-
-        return _mlx
+        print(
+            '{"event":"asr_backend","backend":"mlx-whisper","model":"whisper-tiny","service":"audio-adapter"}',
+            flush=True,
+        )
+        return _transcribe_with_mlx
     except Exception:
         pass
     try:
@@ -311,9 +353,30 @@ def resolve_asr() -> Callable[[NDArray[np.floating], int], AsrResult] | None:
                 return AsrResult(transcript=str(result).strip(), confidence=None)
             return _asr_from_whisper_result(result)
 
+        print(
+            '{"event":"asr_backend","backend":"openai-whisper","model":"tiny.en","service":"audio-adapter"}',
+            flush=True,
+        )
         return _whisper
     except Exception:
+        print(
+            '{"event":"asr_backend","backend":null,"service":"audio-adapter"}',
+            flush=True,
+        )
         return None
+
+
+def describe_asr(asr: Callable[[NDArray[np.floating], int], Any] | None) -> str | None:
+    if asr is None:
+        return None
+    if asr is _transcribe_with_mlx:
+        return "mlx-whisper"
+    name = getattr(asr, "__name__", "")
+    if name == "_whisper":
+        return "openai-whisper"
+    if name == "_transcribe_with_mlx":
+        return "mlx-whisper"
+    return "local-asr"
 
 
 def list_sound_devices() -> list[str]:
@@ -415,6 +478,12 @@ class AudioHardwareRuntime:
         self._disconnect_detail = "microphone disconnected"
         self._disconnect_emitted = False
         self.session_pcm: list[CompletedUtterance] = []
+        self._last_rms = 0.0
+        self._last_peak = 0.0
+        self._peak_since_start = 0.0
+        self._capture_started_mono = 0.0
+        self._silence_warned = False
+        self._asr_warm: threading.Thread | None = None
 
     def start(self) -> None:
         factory = self._stream_factory
@@ -436,6 +505,19 @@ class AudioHardwareRuntime:
         self._capture_live = True
         self._stream_failed = False
         self._disconnect_emitted = False
+        self._silence_warned = False
+        self._peak_since_start = 0.0
+        self._capture_started_mono = time.monotonic()
+        if self.asr is not None:
+            self._asr_warm = threading.Thread(target=self._warmup_asr, name="asr-warmup", daemon=True)
+            self._asr_warm.start()
+
+    def _warmup_asr(self) -> None:
+        try:
+            if self.asr is not None:
+                self.asr(np.zeros(self.sample_rate_hz, dtype=np.float32), self.sample_rate_hz)
+        except Exception:
+            pass
 
     def stop(self) -> None:
         self._capture_live = False
@@ -462,12 +544,19 @@ class AudioHardwareRuntime:
                 elif self.asr is None and not self.phrase:
                     events.append(self._device_status("degraded", "asr_unavailable"))
                 else:
-                    events.append(self._device_status("healthy", "microphone capture started"))
+                    backend = describe_asr(self.asr)
+                    detail = "microphone capture started"
+                    if backend:
+                        detail = f"{detail} ({backend})"
+                    elif self.phrase:
+                        detail = f"{detail} (phrase fallback)"
+                    events.append(self._device_status("healthy", detail))
                 self._started = True
             elif self._stream_failed and not self._disconnect_emitted:
                 events.append(self._device_status("degraded", self._disconnect_detail))
                 self._disconnect_emitted = True
             events.extend(self.drain_capture())
+            events.extend(self._silence_watchdog())
             if self.asr is None and self.phrase and not self._phrase_emitted:
                 events.extend(
                     self.events_for_transcript(
@@ -485,7 +574,11 @@ class AudioHardwareRuntime:
     def ingest_block(self, samples: NDArray[np.floating], received_ns: int) -> list[EventEnvelope]:
         self.ring.push(samples, received_ns)
         events: list[EventEnvelope] = []
-        for utterance in self.vad.push_block(samples, received_ns):
+        was_speech = self.vad.in_speech
+        utterances = self.vad.push_block(samples, received_ns)
+        if self.vad.in_speech and not was_speech:
+            events.append(self._device_status("healthy", "speech detected; waiting for pause"))
+        for utterance in utterances:
             events.extend(self._events_for_utterance(utterance))
         return events
 
@@ -530,21 +623,66 @@ class AudioHardwareRuntime:
         return events
 
     def heartbeat(self, uptime_seconds: float, dropped: int) -> EventEnvelope:
-        degraded = (
-            bool(dropped)
-            or (self.asr is None and not self.phrase)
-            or self._stream_failed
-            or self.ring.overflows > 0
-        )
-        status = "degraded" if degraded else "healthy"
-        return runtime_heartbeat(
+        # Historical ring overflows are counted but do not keep the mic degraded
+        # forever after capture has started.
+        silent = self._silence_warned and not self._stream_failed
+        status = "degraded" if self._stream_failed or silent else "healthy"
+        age_ms = None
+        if self.ring.last_receive_ns is not None:
+            age_ms = (time.monotonic_ns() - self.ring.last_receive_ns) / 1_000_000.0
+        event = runtime_heartbeat(
             SOURCE,
             uptime_seconds=uptime_seconds,
-            last_data_age_ms=None,
-            error_count=dropped + self.dropped_blocks,
+            last_data_age_ms=age_ms,
+            error_count=dropped + self.dropped_blocks + int(self.ring.overflows),
             sequence=self._next_seq(),
             status=status,
         )
+        payload = dict(event.payload)
+        payload.update(
+            {
+                "rms": round(self._last_rms, 5),
+                "peak": round(self._last_peak, 5),
+                "listening": self.vad.in_speech,
+                "asr_backend": describe_asr(self.asr),
+            }
+        )
+        return event.model_copy(update={"payload": payload})
+
+    def _silence_watchdog(self) -> list[EventEnvelope]:
+        if not self._capture_live or self._stream_failed:
+            return []
+        elapsed = time.monotonic() - self._capture_started_mono if self._capture_started_mono else 0.0
+        if elapsed < SILENCE_WATCHDOG_S:
+            return []
+        if self.ring.last_receive_ns is None:
+            if self._silence_warned:
+                return []
+            self._silence_warned = True
+            return [
+                self._device_status(
+                    "degraded",
+                    "microphone opened but no samples arrived",
+                )
+            ]
+        if self._peak_since_start < SILENCE_PEAK:
+            if self._silence_warned:
+                return []
+            self._silence_warned = True
+            return [
+                self._device_status(
+                    "degraded",
+                    "microphone is silent; grant Microphone permission to Terminal or Cursor in System Settings → Privacy & Security → Microphone",
+                )
+            ]
+        if self._silence_warned:
+            self._silence_warned = False
+            backend = describe_asr(self.asr)
+            detail = "microphone capture started"
+            if backend:
+                detail = f"{detail} ({backend})"
+            return [self._device_status("healthy", detail)]
+        return []
 
     def shutdown(self) -> EventEnvelope:
         return self._device_status("offline", "adapter stopping")
@@ -565,6 +703,10 @@ class AudioHardwareRuntime:
                         end_ns=utterance.end_ns,
                         asr_confidence=result.confidence,
                     )
+                else:
+                    events = [
+                        self._device_status("healthy", "heard speech; ASR returned no words")
+                    ]
             elif self.phrase:
                 if not self._phrase_emitted:
                     self._phrase_emitted = True
@@ -606,6 +748,13 @@ class AudioHardwareRuntime:
             mono = np.asarray(indata, dtype=np.float32)
             if mono.ndim > 1:
                 mono = mono[:, 0]
+            if mono.size:
+                peak = float(np.max(np.abs(mono)))
+                rms = float(np.sqrt(np.mean(np.square(mono, dtype=np.float64))))
+                with self._state_lock:
+                    self._last_peak = peak
+                    self._last_rms = rms
+                    self._peak_since_start = max(self._peak_since_start, peak)
             block = (mono.copy(), received_ns)
             with self._pending_lock:
                 if len(self._pending_blocks) >= self._pending_limit:

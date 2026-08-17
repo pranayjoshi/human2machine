@@ -1,53 +1,87 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { EmergencyStop } from "@/components/EmergencyStop";
 import { IntentInspector } from "@/components/IntentInspector";
 import { Sparkline } from "@/components/Sparkline";
 import { StatusPill } from "@/components/Status";
-import { api } from "@/lib/api";
+import { api, API_BASE } from "@/lib/api";
 import { useBusyAction, useLive } from "@/lib/live";
-import type { BiosignalHealth, DemoScenario, PlotSnapshot, VisionState } from "@/lib/types";
+import type { BiosignalHealth, DemoScenario, LiveState, PlotSnapshot, VisionState } from "@/lib/types";
 
-function CameraView({ vision }: { vision: VisionState | null }) {
+function CameraView({
+  vision,
+  preview,
+}: {
+  vision: VisionState | null;
+  preview: { available: boolean; width: number; height: number } | null | undefined;
+}) {
   const objects = vision?.objects ?? [];
   const pointing = new Set((vision?.pointing_candidates ?? []).map((item) => item.object_id));
+  const width = preview?.width || 1280;
+  const height = preview?.height || 720;
+  const live = Boolean(preview?.available);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!live) {
+      return;
+    }
+    const id = window.setInterval(() => setTick((value) => value + 1), 250);
+    return () => window.clearInterval(id);
+  }, [live]);
   return (
     <section className="panel" aria-labelledby="camera-heading">
       <h2 id="camera-heading">Camera / workspace</h2>
       <div className="camera">
-        <svg viewBox="0 0 1280 720" role="img" aria-label="Object overlay from vision.objects">
-          <rect width="1280" height="720" fill="#0a0d11" />
-          <text x="24" y="40" fill="#9aa8b8" fontSize="22">
-            Camera preview unavailable — overlay from vision events
-          </text>
-          {objects.map((obj) => {
-            const [x1, y1, x2, y2] = obj.bbox_xyxy;
-            return (
-              <g key={obj.object_id}>
-                <rect
-                  x={x1}
-                  y={y1}
-                  width={x2 - x1}
-                  height={y2 - y1}
-                  fill="none"
-                  stroke={pointing.has(obj.object_id) ? "#f8e38a" : "#e2e8f0"}
-                  strokeWidth={pointing.has(obj.object_id) ? 6 : 3}
-                />
-                <text x={x1 + 6} y={y1 + 22} fill="#f8fafc" fontSize="18">
-                  {obj.object_id} ({obj.class_name})
+        <div className="camera-stage">
+          {live ? (
+            <img
+              src={`${API_BASE}/api/vision/preview?t=${tick}`}
+              alt="Live camera preview"
+              width={width}
+              height={height}
+            />
+          ) : null}
+          <svg
+            viewBox={`0 0 ${width} ${height}`}
+            role="img"
+            aria-label="Object overlay from vision.objects"
+          >
+            {live ? null : (
+              <>
+                <rect width={width} height={height} fill="#0a0d11" />
+                <text x="24" y="40" fill="#9aa8b8" fontSize={Math.max(18, width / 40)}>
+                  Camera preview unavailable — overlay from vision events
                 </text>
-              </g>
-            );
-          })}
-        </svg>
+              </>
+            )}
+            {objects.map((obj) => {
+              const [x1, y1, x2, y2] = obj.bbox_xyxy;
+              return (
+                <g key={obj.object_id}>
+                  <rect
+                    x={x1}
+                    y={y1}
+                    width={x2 - x1}
+                    height={y2 - y1}
+                    fill="none"
+                    stroke={pointing.has(obj.object_id) ? "#f8e38a" : "#e2e8f0"}
+                    strokeWidth={pointing.has(obj.object_id) ? 6 : 3}
+                  />
+                  <text x={x1 + 6} y={y1 + 22} fill="#f8fafc" fontSize="18">
+                    {obj.object_id} ({obj.class_name})
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
       </div>
       <p className="camera-caption">
         Pointing candidates:{" "}
-        {(vision?.pointing_candidates ?? [])
-          .map((item) => `${item.object_id} ${item.confidence.toFixed(2)}`)
-          .join(", ") || "none"}
+        {(vision?.pointing_candidates ?? []).map((item) => `${item.object_id} ${item.confidence.toFixed(2)}`).join(", ") ||
+          "none"}
       </p>
     </section>
   );
@@ -62,6 +96,60 @@ function formatAge(ageMs: number | null | undefined): string {
 function formatQuality(quality: number | null | undefined): string {
   if (quality == null) return "—";
   return quality.toFixed(2);
+}
+
+function audioCaptureStatus(snapshot: LiveState | null): string {
+  const service = snapshot?.services?.find((item) => item.id === "audio-adapter");
+  if (!service) {
+    return "Audio adapter has not reported yet.";
+  }
+  const detail = service.detail?.trim();
+  if (detail) {
+    return detail;
+  }
+  if (service.status === "offline") {
+    return "Audio adapter is offline.";
+  }
+  return "Microphone is up. Speak a command, then pause.";
+}
+
+function AudioStatusPanel({ snapshot }: { snapshot: LiveState | null }) {
+  const audio = snapshot?.audio;
+  const transcript = audio?.transcript?.trim() ?? "";
+  const service = snapshot?.services?.find((item) => item.id === "audio-adapter");
+  const listening = Boolean(
+    service?.listening || service?.detail?.toLowerCase().includes("speech detected"),
+  );
+  const silent = Boolean(service?.detail?.toLowerCase().includes("silent"));
+  const emptyAsr = Boolean(service?.detail?.toLowerCase().includes("no words"));
+  let transcriptLabel = "No transcript yet. Speak a command, then pause for about half a second.";
+  if (transcript) {
+    transcriptLabel = transcript;
+  } else if (silent) {
+    transcriptLabel = "Microphone is silent. Grant Microphone permission to Terminal or Cursor.";
+  } else if (listening) {
+    transcriptLabel = "Listening… waiting for a pause to transcribe.";
+  } else if (emptyAsr) {
+    transcriptLabel = "Heard speech, but ASR returned no words.";
+  }
+  const phase = audio?.is_final ? "final" : audio ? "partial" : listening ? "listening" : silent ? "silent" : "waiting";
+  const rms = service?.rms;
+  const backend = service?.asr_backend;
+  return (
+    <section className="panel" aria-labelledby="audio-heading">
+      <h3 id="audio-heading">Audio status</h3>
+      <p className="audio-transcript" aria-live="polite">
+        {transcriptLabel}
+      </p>
+      <p>{audio?.action ?? "no action"}</p>
+      <p className="muted">
+        confidence {audio?.confidence?.toFixed(2) ?? "—"} · {phase}
+        {backend ? ` · ${backend}` : ""}
+        {rms != null ? ` · mic ${rms.toFixed(4)}` : ""}
+      </p>
+      <p className="muted">{audioCaptureStatus(snapshot)}</p>
+    </section>
+  );
 }
 
 function biosignalTone(health: BiosignalHealth | undefined): { status: string; label: string } {
@@ -93,12 +181,14 @@ function BiosignalStream({
   health,
   plot,
   sparkLabel,
+  detail,
 }: {
   title: string;
   shadowNote: string;
   health: BiosignalHealth | undefined;
   plot: PlotSnapshot;
   sparkLabel: string;
+  detail?: string | null;
 }) {
   const tone = biosignalTone(health);
   return (
@@ -108,6 +198,7 @@ function BiosignalStream({
       <p>
         <StatusPill status={tone.status} label={tone.label} />
       </p>
+      {detail ? <p className="muted">{detail}</p> : null}
       <dl className="kv">
         <div>
           <dt>Quality</dt>
@@ -166,12 +257,13 @@ export default function SessionPage() {
                 <StatusPill status={service.status} /> {service.name}
                 <div className="check-meta">
                   age {service.last_heartbeat_age_ms ?? "—"} ms · missed {service.missed_heartbeats}
+                  {service.detail ? ` · ${service.detail}` : ""}
                 </div>
               </li>
             ))}
           </ul>
         </section>
-        <CameraView vision={snapshot?.vision ?? null} />
+        <CameraView vision={snapshot?.vision ?? null} preview={snapshot?.vision_preview} />
         <section className="panel" aria-labelledby="intent-heading">
           <h2 id="intent-heading">Request and safety</h2>
           <p>
@@ -248,6 +340,7 @@ export default function SessionPage() {
                 health={snapshot?.biosignals?.eeg}
                 plot={plots.eeg}
                 sparkLabel="Crown EEG (downsampled, shadow-only)"
+                detail={snapshot?.services?.find((item) => item.id === "crown-adapter")?.detail}
               />
               <BiosignalStream
                 title="Ganglion EMG"
@@ -255,17 +348,11 @@ export default function SessionPage() {
                 health={snapshot?.biosignals?.emg}
                 plot={plots.emg}
                 sparkLabel="Ganglion EMG (downsampled, shadow-only)"
+                detail={snapshot?.services?.find((item) => item.id === "ganglion-adapter")?.detail}
               />
             </div>
           </section>
-          <section className="panel">
-            <h3>Audio status</h3>
-            <p>{snapshot?.audio?.action ?? "no action"}</p>
-            <p className="muted">
-              confidence {snapshot?.audio?.confidence?.toFixed(2) ?? "—"} ·{" "}
-              {snapshot?.audio?.is_final ? "final" : "waiting"}
-            </p>
-          </section>
+          <AudioStatusPanel snapshot={snapshot} />
           <section className="panel">
             <h3>Machine timeline</h3>
             <ol className="timeline">

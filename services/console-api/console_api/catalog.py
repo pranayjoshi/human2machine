@@ -10,7 +10,10 @@ SERVICE_CATALOG: list[dict[str, Any]] = [
         "name": "Crown EEG",
         "required": False,
         "aliases": ("crown-adapter", "crown", "neurosity-crown", "neurosity"),
-        "recovery": "Power the Crown, join the same Wi-Fi, and confirm NEUROSITY_* env vars.",
+        "recovery": (
+            "Put the Crown on your head until the sensors make contact, "
+            "and quit the Neurosity app and console.neurosity.co."
+        ),
     },
     {
         "id": "ganglion-adapter",
@@ -18,8 +21,8 @@ SERVICE_CATALOG: list[dict[str, Any]] = [
         "required": True,
         "aliases": ("ganglion-adapter", "ganglion", "ganglion-emg", "openbci-ganglion"),
         "recovery": (
-            "Connect the USB dongle, confirm the serial port in configs/local.yaml, "
-            "and check all four channels."
+            "Power the Ganglion, grant Bluetooth (or plug in the USB dongle), "
+            "and set devices.ganglion.transport: ble or serial_port in configs/local.yaml."
         ),
     },
     {

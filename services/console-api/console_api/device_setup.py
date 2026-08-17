@@ -40,9 +40,16 @@ def public_setup(root: Path, config: dict[str, Any], *, mock: bool) -> dict[str,
     simulator = devices.get("simulator", {})
 
     crown_env = _crown_env_flags(root)
-    env_vars_present = all(crown_env.values())
+    crown_device = _nonempty(crown.get("device_id")) or crown_env["NEUROSITY_DEVICE_ID"]
+    env_vars_present = True
+    if crown_device:
+        crown_detail = f"Crown nickname {crown_device}; OSC listen UDP 9000."
+    else:
+        crown_detail = "Crown OSC listens on UDP 9000. Enable OSC in the Neurosity console."
     serial_port = ganglion.get("serial_port")
     serial_port_set = _nonempty(serial_port)
+    transport = str(ganglion.get("transport") or "usb_dongle").strip().lower()
+    ble_configured = transport in {"ble", "bluetooth", "native", "ganglion_native"}
     audio_device = audio.get("device_name")
     audio_device_set = _nonempty(audio_device)
     camera_index = vision.get("camera_index")
@@ -53,20 +60,18 @@ def public_setup(root: Path, config: dict[str, Any], *, mock: bool) -> dict[str,
             "id": "crown",
             "name": "Neurosity Crown (EEG, shadow-only)",
             "configured": env_vars_present,
-            "detail": (
-                "Crown env vars are set in .env.local."
-                if env_vars_present
-                else "Edit .env.local with NEUROSITY_* names. Values stay on disk, not in this UI."
-            ),
+            "detail": crown_detail,
         },
         {
             "id": "ganglion",
             "name": "OpenBCI Ganglion (EMG)",
-            "configured": serial_port_set or bool(ganglion.get("mock", True)),
+            "configured": serial_port_set or ble_configured or bool(ganglion.get("mock", True)),
             "detail": (
-                "serial_port is set in configs/local.yaml."
+                "Bluetooth (native BLE) is selected in configs/local.yaml."
+                if ble_configured
+                else "serial_port is set in configs/local.yaml."
                 if serial_port_set
-                else "Set devices.ganglion.serial_port in configs/local.yaml for hardware."
+                else "Set devices.ganglion.transport: ble or serial_port in configs/local.yaml."
             ),
         },
         {
@@ -116,6 +121,8 @@ def public_setup(root: Path, config: dict[str, Any], *, mock: bool) -> dict[str,
             "enabled": bool(ganglion.get("enabled", True)),
             "mock": bool(ganglion.get("mock", True)),
             "serial_port_set": serial_port_set,
+            "transport": "ble" if ble_configured else "usb_dongle",
+            "ble_configured": ble_configured,
             "shadow_only": True,
         },
         "audio": {
@@ -157,7 +164,7 @@ def public_setup(root: Path, config: dict[str, Any], *, mock: bool) -> dict[str,
         ],
         "operator_notes": [
             "Do not paste credentials into this browser.",
-            "Edit ignored .env.local and configs/local.yaml.",
+            "Edit configs/local.yaml (Ganglion, mic, camera).",
             "EEG is shadow-only and never drives action.",
             "EMG is shadow-only for Milestone 1 and does not drive action.",
             "Simulator mode cannot emit physical robot commands.",

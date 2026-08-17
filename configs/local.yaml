@@ -17,20 +17,30 @@ runtime:
 devices:
   crown:
     enabled: true
-    mock: true
+    mock: false
+    # BrainFlow Crown OSC listens on UDP 9000. ip_address is not used.
+    ip_address: null
+    ip_port: 9000
+    device_id: "Crown-995"
   ganglion:
     enabled: true
-    mock: true
-    # Set locally for --hardware. Do not commit machine-specific ports.
+    mock: false
+    # usb_dongle (BLED112 serial) or ble (native Bluetooth, no dongle).
+    transport: ble
+    # USB only. Do not commit machine-specific ports.
     serial_port: null
+    # Optional BLE MAC / CoreBluetooth UUID. Empty = autodiscover Ganglion/Simblee.
+    mac_address: 5D8A590C-9B3F-C6BD-F320-A756A08B91E8
+    serial_number: null
+    timeout_seconds: 15
   audio:
     enabled: true
-    mock: true
+    mock: false
     device_name: null
     sample_rate_hz: 16000
   vision:
     enabled: true
-    mock: true
+    mock: false
     camera_index: 0
     width: 1280
     height: 720

@@ -1,9 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Protocol
 
 import numpy as np
 from numpy.typing import NDArray
+
+CHANNEL_FEATURE_NAMES = ("rms", "mav", "var", "wl", "zc", "ssc", "iemg")
+FEATURE_NAMES: tuple[str, ...] = tuple(
+    f"ch{ch}_{name}" for ch in range(4) for name in CHANNEL_FEATURE_NAMES
+) + tuple(f"ch{ch}_rms_ratio" for ch in range(4))
+
+
+class WindowLike(Protocol):
+    block_id: str
+    start_idx: int
+    end_idx: int
 
 
 @dataclass(frozen=True)
@@ -15,6 +27,26 @@ class WindowRecord:
     start_ns: int
     end_ns: int
     features: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class LabeledExample:
+    block_id: str
+    session_id: str
+    label: str
+    start_idx: int
+    end_idx: int
+    features: dict[str, float]
+    quality: float = 1.0
+    start_ns: int = 0
+    end_ns: int = 0
+
+
+def feature_vector(
+    features: dict[str, float],
+    names: tuple[str, ...] | list[str] = FEATURE_NAMES,
+) -> NDArray[np.floating]:
+    return np.asarray([float(features.get(name, 0.0)) for name in names], dtype=float)
 
 
 def rms(channel: NDArray[np.floating]) -> float:
@@ -144,27 +176,27 @@ class WindowBuffer:
         return windows
 
 
-def overlapping(a: WindowRecord, b: WindowRecord) -> bool:
+def overlapping(a: WindowLike, b: WindowLike) -> bool:
     return a.block_id == b.block_id and a.start_idx < b.end_idx and b.start_idx < a.end_idx
 
 
-def split_by_block(
-    windows: list[WindowRecord], test_blocks: set[str]
-) -> tuple[list[WindowRecord], list[WindowRecord]]:
+def split_by_block[TWindow: WindowLike](
+    windows: list[TWindow], test_blocks: set[str]
+) -> tuple[list[TWindow], list[TWindow]]:
     """Grouped split: overlapping windows from one recording block stay together."""
     train = [window for window in windows if window.block_id not in test_blocks]
     test = [window for window in windows if window.block_id in test_blocks]
     return train, test
 
 
-def validate_split_no_leak(train: list[WindowRecord], test: list[WindowRecord]) -> None:
+def validate_split_no_leak(train: list[WindowLike], test: list[WindowLike]) -> None:
     for left in train:
         for right in test:
             if overlapping(left, right):
                 raise ValueError("overlapping-window leakage between train and test")
 
 
-def random_window_split_leaks(windows: list[WindowRecord], rng: np.random.Generator) -> bool:
+def random_window_split_leaks(windows: list[WindowLike], rng: np.random.Generator) -> bool:
     """Demonstrate that a random split of overlapping windows leaks. Not used for training."""
     if len(windows) < 2:
         return False

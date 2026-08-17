@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from intent_contracts.control import SessionStartRequest, TrialStartRequest
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -181,6 +181,42 @@ def create_app(
     @app.post("/api/calibrate/emg/record")
     def calibrate_emg_record() -> dict[str, Any]:
         return runtime.calibrate_emg_record()
+
+    @app.post("/api/calibrate/emg/train")
+    def calibrate_emg_train() -> dict[str, Any]:
+        result = runtime.calibrate_emg_train()
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result)
+        return result
+
+    @app.post("/api/calibrate/emg/false-trigger")
+    def calibrate_emg_false_trigger() -> dict[str, Any]:
+        result = runtime.calibrate_emg_false_trigger()
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result)
+        return result
+
+    @app.post("/api/calibrate/emg/promote")
+    def calibrate_emg_promote() -> dict[str, Any]:
+        result = runtime.calibrate_emg_promote()
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result)
+        return result
+
+    @app.get("/api/vision/preview")
+    def vision_preview() -> Response:
+        jpeg_path, meta = runtime.vision_preview()
+        if jpeg_path is None or meta is None or not meta.get("available"):
+            raise HTTPException(status_code=404, detail="camera preview unavailable")
+        return Response(
+            content=jpeg_path.read_bytes(),
+            media_type="image/jpeg",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Frame-Width": str(meta.get("width", 1280)),
+                "X-Frame-Height": str(meta.get("height", 720)),
+            },
+        )
 
     @app.post("/api/calibrate/vision/complete")
     def calibrate_vision_complete() -> dict[str, Any]:

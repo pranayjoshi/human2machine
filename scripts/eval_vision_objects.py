@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT))
 
 from vision_adapter.color_detector import detect_colored_objects  # noqa: E402
 
-from tests.unit.adapters.test_vision_hardware import EXPECTED_IDS  # noqa: E402
+from tests.helpers.vision_images import EXPECTED_IDS  # noqa: E402
 from tests.end_to_end.test_milestone2_vision_objects import (  # noqa: E402
     RECALL_THRESHOLD,
     STATIONARY_FRAMES,

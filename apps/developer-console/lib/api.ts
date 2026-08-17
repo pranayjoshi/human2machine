@@ -80,6 +80,9 @@ export const api = {
   emgCalibrateStatus: () => apiGet<EmgCalibrationStatus>("/api/calibrate/emg/status"),
   emgCalibrateNext: () => apiPost<EmgCalibrationStatus>("/api/calibrate/emg/next"),
   emgCalibrateRecord: () => apiPost<EmgCalibrationStatus>("/api/calibrate/emg/record"),
+  emgCalibrateTrain: () => apiPost<EmgCalibrationStatus>("/api/calibrate/emg/train"),
+  emgCalibrateFalseTrigger: () => apiPost<EmgCalibrationStatus>("/api/calibrate/emg/false-trigger"),
+  emgCalibratePromote: () => apiPost<EmgCalibrationStatus>("/api/calibrate/emg/promote"),
   visionCalibrateComplete: () =>
     apiPost<{ ok: boolean; complete: boolean }>("/api/calibrate/vision/complete"),
   eegCalibrateAcknowledge: () =>

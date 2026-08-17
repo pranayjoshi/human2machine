@@ -13,6 +13,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from demo_mvp import build_scenario_events, demo_passed  # noqa: E402
+from run_stack import is_optional_stack_child, stack_commands  # noqa: E402
 
 NOW_NS = 100_000_000
 
@@ -92,3 +93,35 @@ def test_demo_pass_criteria() -> None:
     assert demo_passed("APPROVE", None, "cancel")
     assert demo_passed("APPROVE", "CANCELLED", "cancel")
     assert demo_passed("ASK_CONFIRMATION", None, "conflict")
+
+
+def _joined(mock: bool) -> list[str]:
+    return [" ".join(command) for command in stack_commands("python", mock=mock)]
+
+
+def test_mock_stack_passes_mock_to_every_service() -> None:
+    rows = _joined(True)
+    assert any("fusion_runtime.main --mock" in row for row in rows)
+    assert any("ganglion_adapter.main --mock" in row for row in rows)
+    assert any("crown_adapter.main --mock" in row for row in rows)
+
+
+def test_hardware_stack_keeps_simulator_loop_on_mock() -> None:
+    rows = _joined(False)
+    for service in ("fusion_runtime.main", "safety_gateway.main", "robot_simulator.main"):
+        assert any(f"{service} --mock" in row for row in rows)
+        assert not any(f"{service} --hardware" in row for row in rows)
+    for service in ("ganglion_adapter.main", "audio_adapter.main", "vision_adapter.main", "crown_adapter.main"):
+        assert any(f"{service} --hardware" in row for row in rows)
+
+
+def test_crown_adapter_is_optional_only_in_hardware_stack() -> None:
+    hardware = stack_commands("python", mock=False)
+    mock = stack_commands("python", mock=True)
+    crown_hw = next(cmd for cmd in hardware if "crown_adapter.main" in cmd)
+    crown_mock = next(cmd for cmd in mock if "crown_adapter.main" in cmd)
+    assert is_optional_stack_child(crown_hw, mock=False)
+    assert not is_optional_stack_child(crown_mock, mock=True)
+    ganglion = next(cmd for cmd in hardware if "ganglion_adapter.main" in cmd)
+    assert is_optional_stack_child(ganglion, mock=False)
+    assert not is_optional_stack_child(ganglion, mock=True)

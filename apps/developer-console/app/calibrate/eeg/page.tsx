@@ -41,12 +41,12 @@ export default function EegCalibratePage() {
           <p className="muted">Waiting for live service status…</p>
         )}
         <p>
-          Env vars present:{" "}
-          {setup ? (setup.crown.env_vars_present ? "yes (bool only)" : "no — edit .env.local") : "…"}
+          OSC path:{" "}
+          {setup ? (setup.crown.env_vars_present ? "ready (UDP 9000)" : "not ready") : "…"}
         </p>
         <p className="muted">
-          Put the Crown and this Mac on the same Wi-Fi. Confirm the official Neurosity app streams
-          brainwaves before using this repo. Quality drops when the headset moves.
+          Put the Crown and this Mac on the same Wi-Fi. Enable OSC in the Neurosity console.
+          BrainFlow listens on UDP 9000. Quality drops when the headset moves.
         </p>
       </section>
       <section className="panel" style={{ marginTop: "1rem" }}>

@@ -28,9 +28,12 @@ node_modules/
 # Session data and models (keep fixtures)
 data/sessions/
 !data/sessions/.gitkeep
+data/runtime/
 models/**/*.joblib
 models/**/*.pt
 models/**/*.onnx
+models/emg/**
+!models/emg/.gitkeep
 
 # OS / IDE
 .DS_Store

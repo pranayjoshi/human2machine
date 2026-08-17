@@ -1,7 +1,7 @@
 set dotenv-load := false
 
 python := "python"
-export PYTHONPATH := "packages/contracts-python/src:packages/runtime-python/src:services/event-hub:services/fusion-runtime:services/safety-gateway:services/robot-simulator:services/session-recorder:services/console-api:services/ganglion-adapter:services/audio-adapter:services/vision-adapter"
+export PYTHONPATH := "packages/contracts-python/src:packages/runtime-python/src:services/event-hub:services/fusion-runtime:services/safety-gateway:services/robot-simulator:services/session-recorder:services/console-api:services/ganglion-adapter:services/crown-adapter:services/audio-adapter:services/vision-adapter"
 
 bootstrap:
     {{python}} -m pip install -e ".[dev]"
@@ -23,8 +23,8 @@ demo *args:
 soak-biosignals *args:
     {{python}} scripts/soak_biosignals.py {{args}}
 
-run-hardware:
-    {{python}} scripts/run_stack.py --hardware --confirm
+run-hardware *args:
+    {{python}} scripts/run_stack.py --hardware --confirm {{args}}
 
 test:
     {{python}} -m pytest tests -q
@@ -32,6 +32,9 @@ test:
 
 replay SESSION:
     {{python}} -m session_recorder.replay --session {{SESSION}}
+
+eval-emg *args:
+    {{python}} scripts/eval_emg_gestures.py {{args}}
 
 lint:
     {{python}} -m ruff check packages services tests scripts

@@ -3,8 +3,9 @@ import test from "node:test";
 
 import { BiosignalChunkPayloadSchema, EventEnvelopeSchema } from "@intent/contracts";
 
-import { backoffMs, convertEpoch } from "./hardware.ts";
-import { runCrownAdapter } from "./main.ts";
+import { backoffMs, convertEpoch, isAuthFailure, isLoginTimeout, isMissingCredentials, runCrownHardware } from "./hardware.ts";
+import { loadCrownConfig } from "./config.ts";
+import { runCrownAdapter, safeErrorMessage } from "./main.ts";
 import type { CrownClient, CrownEpoch } from "./neurosityClient.ts";
 import { memoryPublisher } from "./publisher.ts";
 import { CROWN_CHANNELS } from "./quality.ts";
@@ -69,6 +70,9 @@ test("hardware path uses injected client samples, not the mock generator", async
 
   const statuses = pub.events.filter((event) => event.event_type === "device.status");
   assert.ok(statuses.some((event) => event.payload.device_alias === "crown"));
+  assert.ok(
+    statuses.some((event) => String(event.payload.detail).includes("connecting to Neurosity")),
+  );
   assert.equal(
     statuses.some((event) => event.payload.device_alias === "crown-mock"),
     false,
@@ -105,4 +109,74 @@ test("reconnect backoff is exponential and capped at 30s", () => {
   assert.equal(backoffMs(1, 30), 2000);
   assert.equal(backoffMs(2, 30), 4000);
   assert.equal(backoffMs(10, 30), 30_000);
+});
+
+test("missing credentials stay offline instead of crashing the adapter", async () => {
+  const pub = memoryPublisher();
+  const client = fakeClient([]);
+  client.login = async () => {
+    client.loginCalls += 1;
+    throw new Error("NEUROSITY_EMAIL, NEUROSITY_PASSWORD, and NEUROSITY_DEVICE_ID are required");
+  };
+  await runCrownAdapter(["--hardware", "--duration-ms", "250"], pub, client);
+  assert.ok(client.loginCalls >= 1);
+  const statuses = pub.events.filter((event) => event.event_type === "device.status");
+  assert.ok(statuses.some((event) => event.payload.status === "offline"));
+  assert.ok(
+    statuses.some((event) => String(event.payload.detail).includes("missing Neurosity credentials")),
+  );
+});
+
+test("hung Neurosity login keeps heartbeats and times out instead of going silent", async () => {
+  const pub = memoryPublisher();
+  let nowMs = 0;
+  const client = fakeClient([]);
+  client.login = () =>
+    new Promise(() => {
+      client.loginCalls += 1;
+    });
+  await runCrownHardware({
+    client,
+    publisher: pub,
+    config: loadCrownConfig(),
+    stopped: () => false,
+    durationMs: 25_000,
+    loginTimeoutMs: 20_000,
+    now: () => nowMs,
+    sleep: async (ms) => {
+      nowMs += ms;
+    },
+  });
+  const heartbeats = pub.events.filter((event) => event.event_type === "service.heartbeat");
+  assert.ok(heartbeats.length >= 8, `expected heartbeats during hung login, got ${heartbeats.length}`);
+  const statuses = pub.events.filter((event) => event.event_type === "device.status");
+  assert.ok(
+    statuses.some((event) => String(event.payload.detail).includes("Neurosity login timed out")),
+  );
+  assert.ok(client.disconnectCalls >= 1);
+  assert.equal(isLoginTimeout("Neurosity login timed out after 20000ms"), true);
+});
+
+test("auth failure stays degraded instead of crashing the adapter", async () => {
+  const pub = memoryPublisher();
+  const client = fakeClient([]);
+  client.login = async () => {
+    client.loginCalls += 1;
+    throw new Error("auth/wrong-password");
+  };
+  await runCrownAdapter(["--hardware", "--duration-ms", "250"], pub, client);
+  assert.ok(client.loginCalls >= 1);
+  const statuses = pub.events.filter((event) => event.event_type === "device.status");
+  assert.ok(statuses.some((event) => event.payload.status === "degraded"));
+});
+
+test("safe error messages do not hide missing credentials as authentication failed", () => {
+  assert.equal(
+    isMissingCredentials("NEUROSITY_EMAIL, NEUROSITY_PASSWORD, and NEUROSITY_DEVICE_ID are required"),
+    true,
+  );
+  assert.equal(isAuthFailure("auth/wrong-password"), true);
+  assert.match(safeErrorMessage("NEUROSITY_PASSWORD is required"), /missing Neurosity credentials/);
+  assert.match(safeErrorMessage("wrong password"), /authentication failed/);
+  assert.equal(safeErrorMessage("stream is not an Observable"), "stream is not an Observable");
 });

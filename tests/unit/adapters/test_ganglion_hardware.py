@@ -3,7 +3,12 @@ from __future__ import annotations
 import time
 
 import numpy as np
-from ganglion_adapter.acquisition import GANGLION_BOARD_ID, BrainFlowAcquisition
+from ganglion_adapter.acquisition import (
+    GANGLION_BOARD_ID,
+    GANGLION_NATIVE_BOARD_ID,
+    BrainFlowAcquisition,
+    connection_from_mapping,
+)
 from ganglion_adapter.main import main
 from ganglion_adapter.publisher import ListSink
 
@@ -123,3 +128,119 @@ def test_hardware_start_failure_emits_offline_and_exits(monkeypatch) -> None:
     assert statuses[0]["payload"]["status"] == "offline"
     assert "dongle missing" in str(statuses[0]["payload"]["detail"])
     assert "normalized_time_ns" not in statuses[0]
+
+
+def test_usb_hardware_without_port_exits_offline() -> None:
+    sink = ListSink()
+    code = main(["--hardware", "--transport", "usb_dongle"], sink=sink)
+    assert code == 1
+    statuses = [event for event in sink.events if event["event_type"] == "device.status"]
+    assert statuses
+    assert statuses[0]["payload"]["status"] == "offline"
+    assert "serial_port" in str(statuses[0]["payload"]["detail"])
+
+
+def test_ble_start_uses_native_board_and_optional_mac() -> None:
+    acq = BrainFlowAcquisition(
+        transport="ble",
+        mac_address="AA:BB:CC:DD:EE:FF",
+        board_shim=FakeBoardShim,
+        eeg_channels=[1, 2, 3, 4],
+        timestamp_channel=13,
+        poll_s=0.01,
+    )
+    acq.start()
+    try:
+        instance = FakeBoardShim.last_instance
+        assert instance is not None
+        assert instance.board_id == GANGLION_NATIVE_BOARD_ID
+        assert instance.params.mac_address == "AA:BB:CC:DD:EE:FF"
+        assert instance.params.timeout == 15
+        assert instance.prepared is True
+    finally:
+        acq.stop()
+
+
+def test_ble_autodiscover_does_not_require_serial_port() -> None:
+    acq = BrainFlowAcquisition(
+        transport="ble",
+        board_shim=FakeBoardShim,
+        eeg_channels=[1, 2, 3, 4],
+        timestamp_channel=13,
+        poll_s=0.01,
+    )
+    acq.start()
+    try:
+        instance = FakeBoardShim.last_instance
+        assert instance is not None
+        assert instance.board_id == GANGLION_NATIVE_BOARD_ID
+        assert not instance.params.serial_port
+    finally:
+        acq.stop()
+
+
+def test_ble_start_failure_retries_instead_of_exiting(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def start(self) -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("BOARD_NOT_CREATED_ERROR")
+
+    monkeypatch.setattr(BrainFlowAcquisition, "start", start)
+    monkeypatch.setattr(BrainFlowAcquisition, "next_chunk", lambda self: None)
+    monkeypatch.setattr(BrainFlowAcquisition, "stop", lambda self: None)
+    sink = ListSink()
+    code = main(
+        ["--hardware", "--ble", "--timeout", "1", "--duration-seconds", "0.05"],
+        sink=sink,
+    )
+    assert code == 0
+    assert calls["n"] >= 2
+    details = [
+        str(event["payload"].get("detail", ""))
+        for event in sink.events
+        if event["event_type"] == "device.status"
+    ]
+    assert any("retrying" in detail for detail in details)
+
+
+def test_ble_cli_starts_without_serial_port(monkeypatch) -> None:
+    monkeypatch.setattr(BrainFlowAcquisition, "start", lambda self: None)
+    monkeypatch.setattr(BrainFlowAcquisition, "next_chunk", lambda self: None)
+    monkeypatch.setattr(BrainFlowAcquisition, "stop", lambda self: None)
+    sink = ListSink()
+    code = main(["--hardware", "--ble", "--duration-seconds", "0.05"], sink=sink)
+    assert code == 0
+    statuses = [event for event in sink.events if event["event_type"] == "device.status"]
+    assert statuses
+    assert statuses[0]["payload"]["metadata"]["mode"] == "ble"
+
+
+def test_connection_from_mapping_prefers_ble_over_empty_serial() -> None:
+    conn = connection_from_mapping({"transport": "ble", "serial_port": None})
+    assert conn.transport == "ble"
+    assert conn.board_id == GANGLION_NATIVE_BOARD_ID
+    conn.validate()
+
+
+def test_simblee_is_a_ganglion_ble_name() -> None:
+    from ganglion_adapter.ble_scan import is_ganglion_advertisement
+
+    assert is_ganglion_advertisement("Simblee") is True
+    assert is_ganglion_advertisement("Ganglion-XXXX") is True
+    assert is_ganglion_advertisement("AirPods") is False
+
+
+def test_list_devices_prints_simblee_from_ble_scan(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "ganglion_adapter.main.scan_ble_devices",
+        lambda **_kwargs: [{"name": "Simblee", "address": "simblee-uuid", "rssi": -42}],
+    )
+    monkeypatch.setattr("ganglion_adapter.main.list_serial_candidates", lambda: [])
+    code = main(["--hardware", "--list-devices"])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "Simblee" in out
+    assert "simblee-uuid" in out
+    assert "serial_number: Simblee" in out

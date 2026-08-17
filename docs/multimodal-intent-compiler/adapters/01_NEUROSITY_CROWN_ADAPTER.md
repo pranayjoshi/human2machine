@@ -8,19 +8,16 @@ EEG remains `shadow_only=true` until offline evaluation proves incremental value
 
 ## Technology
 
-- TypeScript
-- `@neurosity/sdk`
-- RxJS
-- Zod shared contracts
-- Node ZeroMQ client
+- Python 3.12
+- BrainFlow `CROWN_BOARD` (OSC over local Wi-Fi; same `--ip` / `--device-id` as MindExecute)
+- Shared Pydantic contracts
+- ZeroMQ PUSH to the event hub
 - Structured JSON logging
 
 ## Inputs
 
-- `NEUROSITY_EMAIL`
-- `NEUROSITY_PASSWORD` or a supported token workflow
-- `NEUROSITY_DEVICE_ID`
-- Stream mode in configuration
+- Crown nickname (optional `--device-id` / `devices.crown.device_id`)
+- OSC enabled on the headset (UDP 9000 broadcast)
 - Session state from local console API
 
 ## Outputs
@@ -35,20 +32,13 @@ EEG remains `shadow_only=true` until offline evaluation proves incremental value
 
 ### 1. Authentication and device selection
 
-- Load secrets at runtime.
-- Authenticate once and never print credentials or tokens.
-- If multiple devices exist, require an explicit device ID.
-- Query device state and verify the selected device is online.
-- Emit a status event containing safe metadata only: device alias, streaming mode, battery if exposed, and OS version if exposed.
+- Load optional nickname for logs (`--device-id` or `devices.crown.device_id`).
+- Bind BrainFlow CROWN_BOARD on UDP 9000. Do not connect to a headset IP.
+- Never print credentials or tokens.
 
 ### 2. Subscribe to streams
 
-Subscribe to:
-
-- `brainwaves("raw")` for filtered EEG.
-- `accelerometer()` for motion/artifact context.
-
-Add an optional configuration for `rawUnfiltered`, but do not enable it by default. The default raw stream is already filtered by the Crown and is appropriate for initial feature work.
+Poll BrainFlow `get_board_data()` for the eight Crown EEG channels at 256 Hz. Publish 16-sample epochs.
 
 For each EEG epoch:
 
@@ -129,7 +119,7 @@ crown:
 - Do not forward Crown data outside localhost.
 - Do not upload session recordings automatically.
 - Redact credentials and account identifiers.
-- Show in the UI that the normal Wi-Fi/Node path may transit Neurosity infrastructure.
+- OSC stays on the local Wi-Fi; do not use the cloud SDK login path.
 - Stop acquisition immediately when the user stops a session.
 
 ## Tests

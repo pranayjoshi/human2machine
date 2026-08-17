@@ -1,6 +1,6 @@
 /**
- * Thin Neurosity SDK wrapper. Tests must use MockCrownClient and must
- * never call login() on the hardware client.
+ * Test doubles and helpers for the (legacy) TypeScript Crown path.
+ * Live Crown hardware uses the Python neurosity SDK in crown_adapter/.
  */
 
 export type CrownEpoch = {
@@ -47,152 +47,99 @@ export class MockCrownClient implements CrownClient {
   }
 }
 
-export class NeurosityCrownClient implements CrownClient {
-  async login(): Promise<void> {
-    const email = process.env.NEUROSITY_EMAIL;
-    const password = process.env.NEUROSITY_PASSWORD;
-    const deviceId = process.env.NEUROSITY_DEVICE_ID;
-    if (!email || !password || !deviceId) {
-      throw new Error("NEUROSITY_EMAIL, NEUROSITY_PASSWORD, and NEUROSITY_DEVICE_ID are required");
+export type CrownDeviceInfo = {
+  deviceId?: string;
+  deviceNickname?: string;
+  status?: string;
+};
+
+export function normalizeCrownName(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_]+/g, "-");
+}
+
+export function looksLikeNeurosityDeviceId(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length < 20) {
+    return false;
+  }
+  if (/^crown[-_]?\d+$/i.test(trimmed)) {
+    return false;
+  }
+  return /^[A-Za-z0-9]+$/.test(trimmed);
+}
+
+export function deviceMatchesWanted(device: CrownDeviceInfo, wanted: string): boolean {
+  const needle = wanted.trim();
+  if (!needle) {
+    return false;
+  }
+  const id = device.deviceId ?? "";
+  const nick = device.deviceNickname ?? "";
+  if (id && id === needle) {
+    return true;
+  }
+  if (nick && nick.toLowerCase() === needle.toLowerCase()) {
+    return true;
+  }
+  const left = normalizeCrownName(nick);
+  const right = normalizeCrownName(needle);
+  if (left && left === right) {
+    return true;
+  }
+  if (left.replace(/^crown-/, "") === right.replace(/^crown-/, "") && left.replace(/^crown-/, "") !== "") {
+    return true;
+  }
+  return false;
+}
+
+export function summarizeCrownDevices(devices: CrownDeviceInfo[]): string {
+  if (devices.length === 0) {
+    return "none";
+  }
+  return devices
+    .map((device) => {
+      const nick = device.deviceNickname || "unnamed";
+      const status = device.status || "unknown";
+      return `${nick} (${status})`;
+    })
+    .join(", ");
+}
+
+export function pickCrownDevice(devices: CrownDeviceInfo[], wanted?: string): CrownDeviceInfo {
+  if (devices.length === 0) {
+    throw new Error("no Crown devices claimed on this Neurosity account");
+  }
+  const needle = (wanted ?? "").trim();
+  if (needle) {
+    const match = devices.find((device) => deviceMatchesWanted(device, needle));
+    if (!match) {
+      throw new Error(
+        `NEUROSITY_DEVICE_ID did not match a claimed Crown (${summarizeCrownDevices(devices)}). Use the nickname or the 32-character Device ID from the Neurosity app Settings → Device Info.`,
+      );
     }
-    const sdk = (await import("@neurosity/sdk")) as unknown as {
-      Neurosity: new (opts: { deviceId: string }) => {
-        login: (creds: { email: string; password: string }) => Promise<void>;
-        brainwaves: (kind: string) => unknown;
-        accelerometer: () => unknown;
-        disconnect?: () => Promise<void>;
-      };
-    };
-    const client = new sdk.Neurosity({ deviceId });
-    await client.login({ email, password });
-    this._client = client;
+    return match;
   }
-
-  async *rawEpochs(): AsyncIterable<CrownEpoch> {
-    if (!this._client) {
-      throw new Error("not authenticated");
-    }
-    yield* asAsyncIterable<CrownEpoch>(this._client.brainwaves("raw"));
+  const online = devices.filter((device) => (device.status ?? "").toLowerCase() === "online");
+  if (online.length === 1) {
+    return online[0];
   }
-
-  async *accelerometer(): AsyncIterable<CrownAccel> {
-    if (!this._client) {
-      throw new Error("not authenticated");
-    }
-    yield* asAsyncIterable<CrownAccel>(this._client.accelerometer());
+  if (devices.length === 1) {
+    return devices[0];
   }
-
-  async disconnect(): Promise<void> {
-    await this._client?.disconnect?.();
-    this._client = undefined;
-  }
-
-  private _client?: {
-    brainwaves: (kind: string) => unknown;
-    accelerometer: () => unknown;
-    disconnect?: () => Promise<void>;
-  };
+  throw new Error(
+    `multiple Crown devices on this account; set NEUROSITY_DEVICE_ID to a nickname or deviceId (${summarizeCrownDevices(devices)})`,
+  );
 }
 
 export function createCrownClient(mock: boolean): CrownClient {
   if (mock) {
     return new MockCrownClient();
   }
-  return new NeurosityCrownClient();
+  throw new Error(
+    "Crown hardware uses the Python neurosity SDK; run python -m crown_adapter.main --hardware",
+  );
 }
 
-type RxSubscriber = {
-  unsubscribe?: () => void;
-};
-
-/**
- * Neurosity SDK streams are RxJS Observables. Tests may inject AsyncIterables.
- */
-export async function* asAsyncIterable<T>(
-  source: unknown,
-  isStopped?: () => boolean,
-): AsyncIterable<T> {
-  if (source != null && typeof (source as AsyncIterable<T>)[Symbol.asyncIterator] === "function") {
-    for await (const item of source as AsyncIterable<T>) {
-      if (isStopped?.()) {
-        return;
-      }
-      yield item;
-    }
-    return;
-  }
-
-  const observable = source as {
-    subscribe: (...args: unknown[]) => RxSubscriber | (() => void);
-  };
-  if (source == null || typeof observable.subscribe !== "function") {
-    throw new Error("stream is not an Observable or AsyncIterable");
-  }
-
-  const queue: T[] = [];
-  let done = false;
-  let failure: unknown;
-  let notify: (() => void) | null = null;
-  const wake = () => {
-    const fn = notify;
-    notify = null;
-    fn?.();
-  };
-
-  const observer = {
-    next(value: T) {
-      queue.push(value);
-      wake();
-    },
-    error(err: unknown) {
-      failure = err;
-      done = true;
-      wake();
-    },
-    complete() {
-      done = true;
-      wake();
-    },
-  };
-
-  let subscription: RxSubscriber | (() => void) | undefined;
-  try {
-    subscription = observable.subscribe(observer);
-  } catch {
-    subscription = observable.subscribe(observer.next, observer.error, observer.complete);
-  }
-
-  const unsubscribe = () => {
-    if (typeof subscription === "function") {
-      subscription();
-    } else {
-      subscription?.unsubscribe?.();
-    }
-  };
-
-  try {
-    while (!done || queue.length > 0) {
-      if (isStopped?.()) {
-        return;
-      }
-      if (queue.length === 0) {
-        await Promise.race([
-          new Promise<void>((resolve) => {
-            notify = resolve;
-          }),
-          new Promise<void>((resolve) => setTimeout(resolve, 100)),
-        ]);
-        continue;
-      }
-      const item = queue.shift();
-      if (item !== undefined) {
-        yield item;
-      }
-    }
-    if (failure !== undefined) {
-      throw failure;
-    }
-  } finally {
-    unsubscribe();
-  }
+export function isTransientNeurosityAuthError(message: string): boolean {
+  return /no elements in sequence|failed to get user claims/i.test(message);
 }

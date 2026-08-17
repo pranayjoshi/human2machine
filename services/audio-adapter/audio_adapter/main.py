@@ -19,6 +19,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--duration-seconds", type=float, default=0.0)
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Verify ASR + microphone without starting the stack",
+    )
+    parser.add_argument(
         "--phrase",
         default=None,
         help="Operator transcript fallback when ASR is unavailable",
@@ -41,6 +46,11 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
     )
     audio_cfg = config.get("audio", {})
     devices_cfg = config.get("devices", {}).get("audio", {})
+
+    if args.self_test:
+        from audio_adapter.self_test import run_self_test
+
+        return run_self_test()
 
     if args.list_devices:
         if mock:

@@ -1,5 +1,5 @@
 import { loadCrownConfig, loadEnvLocal } from "./config.ts";
-import { runCrownHardware } from "./hardware.ts";
+import { isAuthFailure, isMissingCredentials, runCrownHardware } from "./hardware.ts";
 import { CrownMockGenerator, SAMPLE_RATE_HZ, SAMPLES_PER_CHUNK } from "./mock.ts";
 import { createCrownClient, type CrownClient } from "./neurosityClient.ts";
 import { createPublisher, type Publisher } from "./publisher.ts";
@@ -12,6 +12,7 @@ export type CliOptions = {
   durationMs: number;
   disconnectAfterMs: number;
   fast: boolean;
+  listDevices: boolean;
   endpoint?: string;
 };
 
@@ -24,12 +25,16 @@ export function parseArgs(argv: string[]): CliOptions {
     durationMs: 0,
     disconnectAfterMs: 0,
     fast: false,
+    listDevices: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--mock") {
       opts.mock = true;
     } else if (arg === "--hardware") {
+      opts.mock = false;
+    } else if (arg === "--list-devices") {
+      opts.listDevices = true;
       opts.mock = false;
     } else if (arg === "--motion") {
       opts.motion = true;
@@ -63,6 +68,16 @@ export async function runCrownAdapter(
   const args = parseArgs(argv);
   const config = loadCrownConfig();
   loadEnvLocal();
+  if (args.listDevices) {
+    console.error(
+      JSON.stringify({
+        event: "crown_list_devices",
+        service: "crown-adapter",
+        msg: "Crown hardware uses the Python neurosity SDK. Run: python -m crown_adapter.main --hardware --list-devices",
+      }),
+    );
+    return;
+  }
   const pub = publisher ?? (await createPublisher(args.endpoint ?? config.endpoint));
   let stopped = false;
   const halt = () => {
@@ -144,10 +159,20 @@ const entry = process.argv[1] ?? "";
 if (entry.endsWith("main.ts") || entry.endsWith("main.js")) {
   runCrownAdapter().catch((error) => {
     const raw = error instanceof Error ? error.message : String(error);
-    const msg = /password|passwd|token|secret|authorization/i.test(raw)
-      ? "authentication failed"
-      : raw;
-    console.error(JSON.stringify({ level: "error", msg }));
+    console.error(JSON.stringify({ level: "error", service: "crown-adapter", msg: safeErrorMessage(raw) }));
     process.exit(1);
   });
+}
+
+export function safeErrorMessage(raw: string): string {
+  if (isMissingCredentials(raw)) {
+    return "missing Neurosity credentials; copy .env.example to .env.local and set NEUROSITY_EMAIL, NEUROSITY_PASSWORD, and NEUROSITY_DEVICE_ID";
+  }
+  if (isAuthFailure(raw)) {
+    return "Neurosity authentication failed; check .env.local (values are not logged)";
+  }
+  if (/no elements in sequence|failed to get user claims/i.test(raw)) {
+    return "Neurosity login failed before user claims were ready; retry without passing a nickname as NEUROSITY_DEVICE_ID";
+  }
+  return raw;
 }

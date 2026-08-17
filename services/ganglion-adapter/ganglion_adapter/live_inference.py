@@ -1,8 +1,51 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ganglion_adapter.model import EmgModel
 
 LABELS = ("rest", "confirm", "cancel", "unknown")
+
+
+class GestureClassifier:
+    """Trained model when promoted; RMS heuristic otherwise. Never commits on its own."""
+
+    def __init__(self, model: EmgModel | None = None, model_id: str = "emg-rms-v0") -> None:
+        self.model = model
+        self.model_id = model.model_id if model is not None else model_id
+
+    def predict(self, features: dict[str, float]) -> tuple[str, dict[str, float]]:
+        if self.model is None:
+            return classify_by_rms(features)
+        return self.model.predict(features)
+
+    def replace(self, model: EmgModel | None, fallback_id: str = "emg-rms-v0") -> None:
+        self.model = model
+        self.model_id = model.model_id if model is not None else fallback_id
+
+
+class ModelReloader:
+    def __init__(self, models_dir: Path | None, fallback_id: str = "emg-rms-v0") -> None:
+        self.models_dir = models_dir
+        self.fallback_id = fallback_id
+        self.classifier = GestureClassifier(model_id=fallback_id)
+        self._mtime: float | None = None
+        self.reload()
+
+    def reload(self) -> None:
+        if self.models_dir is None:
+            return
+        from ganglion_adapter.model import load_current_model, pointer_mtime
+
+        mtime = pointer_mtime(self.models_dir)
+        if mtime == self._mtime:
+            return
+        self._mtime = mtime
+        loaded = load_current_model(self.models_dir) if mtime is not None else None
+        self.classifier.replace(loaded, self.fallback_id)
 
 
 def classify_by_rms(
@@ -56,6 +99,7 @@ def _normalize(scores: dict[str, float]) -> dict[str, float]:
 @dataclass
 class LiveSmoother:
     dwell_ms: float = 200.0
+    cancel_dwell_ms: float | None = None
     hysteresis: float = 0.12
     refractory_ms: float = 400.0
     confidence_threshold: float = 0.7
@@ -92,7 +136,10 @@ class LiveSmoother:
             return self.committed, self.committed_confidence
 
         assert self.pending_since_ns is not None
-        dwell_ns = int(self.dwell_ms * 1_000_000)
+        dwell_ms = self.dwell_ms
+        if label == "cancel" and self.cancel_dwell_ms is not None:
+            dwell_ms = self.cancel_dwell_ms
+        dwell_ns = int(dwell_ms * 1_000_000)
         if now_ns - self.pending_since_ns < dwell_ns:
             return self.committed, self.committed_confidence
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -11,7 +12,7 @@ from ganglion_adapter.acquisition import CHANNEL_NAMES, MockAcquisition
 from ganglion_adapter.events import heartbeat, make_event
 from ganglion_adapter.features import WindowBuffer
 from ganglion_adapter.filters import CausalEmgFilter
-from ganglion_adapter.live_inference import LiveSmoother, classify_by_rms
+from ganglion_adapter.live_inference import GestureClassifier, LiveSmoother, ModelReloader
 
 
 def score_emg_quality(
@@ -46,6 +47,7 @@ class GanglionMockRuntime:
     window_ms: float = 250.0
     hop_ms: float = 50.0
     dwell_ms: float = 200.0
+    cancel_dwell_ms: float = 150.0
     hysteresis: float = 0.12
     refractory_ms: float = 400.0
     confidence_threshold: float = 0.7
@@ -56,6 +58,8 @@ class GanglionMockRuntime:
     model_id: str = "emg-mock-rms-v0"
     shadow_only: bool = True
     acquisition: object | None = None
+    models_dir: Path | None = None
+    classifier: GestureClassifier | None = None
 
     sequence: int = 0
     started_ns: int = 0
@@ -86,10 +90,17 @@ class GanglionMockRuntime:
         self._windows = WindowBuffer(window_samples, hop_samples)
         self._smoother = LiveSmoother(
             dwell_ms=self.dwell_ms,
+            cancel_dwell_ms=self.cancel_dwell_ms,
             hysteresis=self.hysteresis,
             refractory_ms=self.refractory_ms,
             confidence_threshold=self.confidence_threshold,
         )
+        self._reloader = ModelReloader(self.models_dir, fallback_id=self.model_id)
+        if self.classifier is not None:
+            self._reloader.classifier = self.classifier
+        else:
+            self.classifier = self._reloader.classifier
+        self.model_id = self.classifier.model_id
 
     def set_disconnected(self, disconnected: bool) -> None:
         was = self._acq.disconnected
@@ -164,8 +175,11 @@ class GanglionMockRuntime:
             )
         )
         windows = self._windows.push(filtered, first_ns, self.sample_rate_hz)
+        self._reloader.reload()
+        self.classifier = self._reloader.classifier
+        self.model_id = self.classifier.model_id
         for window in windows:
-            raw_label, scores = classify_by_rms(window.features)
+            raw_label, scores = self.classifier.predict(window.features)
             if quality < 0.4:
                 raw_label, scores = (
                     "unknown",

@@ -15,7 +15,7 @@ export default function CalibrateIndexPage() {
           <h2>
             <Link href="/calibrate/emg">EMG (Ganglion)</Link>
           </h2>
-          <p>Rest 30s, confirm ×20, cancel ×20, then a false-trigger rest note. EEG is not used here.</p>
+          <p>Rest 30s, confirm ×20, cancel ×20, randomized block, train, then a false-trigger rest trial.</p>
         </section>
         <section className="panel">
           <h2>

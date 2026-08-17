@@ -176,6 +176,9 @@ def try_mediapipe_pointing(
 
 def maybe_create_hands() -> Any | None:
     try:
+        from vision_adapter.protobuf_compat import patch_protobuf_get_prototype
+
+        patch_protobuf_get_prototype()
         import mediapipe as mp
     except Exception:
         return None
