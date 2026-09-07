@@ -11,12 +11,12 @@ import { ModeBadge } from "@/components/ModeBadge";
 import { useLive } from "@/lib/live";
 
 const LINKS = [
-  { href: "/", label: "Preflight" },
-  { href: "/setup", label: "Setup" },
-  { href: "/calibrate", label: "Calibration" },
-  { href: "/session", label: "Live session" },
-  { href: "/inspect", label: "Intent inspector" },
-  { href: "/review", label: "Session review" },
+  { href: "/", label: "Overview", mark: "01" },
+  { href: "/session", label: "Live", mark: "02" },
+  { href: "/inspect", label: "Decision", mark: "03" },
+  { href: "/review", label: "Sessions", mark: "04" },
+  { href: "/calibrate", label: "Calibrate", mark: "05" },
+  { href: "/setup", label: "Devices", mark: "06" },
 ];
 
 function formatTimer(startedAt?: number | null): string {
@@ -33,13 +33,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   const session = snapshot?.session ?? null;
   const recording = session?.state === "RECORDING";
 
+  if (pathname === "/" || pathname === "/privacy") return <>{children}</>;
+
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <header className="topbar">
-        <div className="brand">Intent compiler · v{SCHEMA_VERSION}</div>
+      <aside className="sidebar">
+        <Link className="brand" href="/" aria-label="Human to Machine home">
+          <span className="brand-mark">H/M</span>
+          <span>
+            <strong>Human to Machine</strong>
+            <small>Intent workspace</small>
+          </span>
+        </Link>
+        <p className="nav-label">Workspace</p>
         <nav className="nav" aria-label="Primary">
           {LINKS.map((link) => (
             <Link
@@ -52,33 +61,39 @@ export function AppShell({ children }: { children: ReactNode }) {
                   : undefined
               }
             >
+              <span>{link.mark}</span>
               {link.label}
             </Link>
           ))}
         </nav>
-        <div className="topbar-status">
+        <div className="sidebar-status">
+          <ModeBadge mode={snapshot?.machine_mode ?? config?.machine_mode} />
           <span className={`live-dot ${connected ? "on" : ""}`}>
             <span className="mark" aria-hidden="true" />
-            {connected ? "Live stream connected" : "Live stream disconnected"}
+            {connected ? "Console connected" : "Console offline"}
           </span>
-          {session ? (
-            <>
-              <span className={`live-dot ${recording ? "rec" : ""}`}>
-                <span className="mark" aria-hidden="true" />
-                {recording ? "Recording" : session.state}
-              </span>
-              <span aria-label={`Session timer ${formatTimer(session.started_at_ms)}`}>
+          <small>Contract {SCHEMA_VERSION}</small>
+        </div>
+      </aside>
+      <div className="app-main">
+        <header className="topbar">
+          <div className="session-status">
+            <span className={`live-dot ${recording ? "rec" : connected ? "on" : ""}`}>
+              <span className="mark" aria-hidden="true" />
+              {recording ? "Session live" : session ? session.state : "Ready"}
+            </span>
+            {session ? (
+              <span className="session-timer" aria-label={`Session timer ${formatTimer(session.started_at_ms)}`}>
                 {formatTimer(session.started_at_ms)}
               </span>
-            </>
-          ) : null}
-          <ModeBadge mode={snapshot?.machine_mode ?? config?.machine_mode} />
+            ) : null}
+          </div>
           {session ? <EmergencyStop latched={Boolean(snapshot?.estop_latched)} /> : null}
-        </div>
-      </header>
-      <main id="main" className="page">
-        {children}
-      </main>
+        </header>
+        <main id="main" className="page">
+          {children}
+        </main>
+      </div>
       <ConfirmationModal confirmation={snapshot?.confirmation ?? null} />
     </div>
   );

@@ -1,0 +1,6 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="10" fill="#150a0d"/>
+  <text x="3" y="42" fill="#efe8dc" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" letter-spacing="-2">H</text>
+  <text x="23" y="43" fill="#f07864" font-family="Arial, Helvetica, sans-serif" font-size="33" font-weight="700" letter-spacing="-2">2</text>
+  <text x="42" y="42" fill="#efe8dc" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" letter-spacing="-2">M</text>
+</svg>

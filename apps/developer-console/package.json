@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
+    "build:landing": "next build && node scripts/stage-landing.mjs",
     "start": "next start -p 3000",
     "lint": "tsc --noEmit"
   },

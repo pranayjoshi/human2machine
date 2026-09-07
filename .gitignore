@@ -16,6 +16,8 @@ build/
 # Node
 node_modules/
 .next/
+apps/developer-console/out/
+apps/developer-console/landing-dist/
 .turbo/
 .pnpm-store/
 *.tsbuildinfo
@@ -24,6 +26,7 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.data/
 
 # Session data and models (keep fixtures)
 data/sessions/

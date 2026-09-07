@@ -1,0 +1,499 @@
+/* Landing page responsive contract. Loaded after globals.css so one layer owns every breakpoint. */
+.immersive-shell {
+  width: 100%;
+  overflow-x: clip;
+}
+
+.immersive-hero {
+  min-height: max(820px, 100svh);
+}
+
+.immersive-nav {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.human-map {
+  container-type: inline-size;
+}
+
+.compiler-stream {
+  min-height: 52px;
+  touch-action: manipulation;
+}
+
+.immersive-form input,
+.immersive-form button,
+.immersive-nav a {
+  min-height: 44px;
+}
+
+/* Desktop keeps the headline above a bounded human column. */
+@media (min-width: 1200px) {
+  .immersive-hero { min-height: max(700px, 100svh); }
+  .map-figure.biohuman-figure { height: 80%; }
+  .biohuman-figure + .neural-crown { top: 15.5%; }
+  .human-map .eye-beam { top: 21.5%; }
+  .human-map .voice-beam { top: 25%; }
+  .human-map .emg-trace { top: 42%; }
+  .human-map .heat-map { top: 47%; }
+}
+
+/* Keep the bio-industrial scene composed on very wide displays. */
+@media (min-width: 2000px) {
+  .immersive-title { left: calc(50% - 920px); }
+  .map-figure.biohuman-figure { left: calc(50% - 530px); }
+  .biohuman-figure + .neural-crown { left: calc(50% - 600px); }
+  .human-map .eye-beam { left: calc(50% - 525px); }
+  .human-map .voice-beam { left: calc(50% - 528px); }
+  .human-map .emg-trace { left: calc(50% - 675px); }
+  .human-map .heat-map { left: calc(50% - 565px); }
+  .translation-layer { left: calc(50% - 170px); }
+  .robot-destination { left: calc(50% + 620px); right: auto; }
+}
+
+/* Tablet: human and compiler share the first stage; the robot becomes a clear second stage. */
+@media (max-width: 1199px) and (min-width: 768px) {
+  .immersive-hero { min-height: 1420px; }
+  .immersive-title { left: 28px; top: 108px; width: 240px; }
+  .immersive-title h1 { font-size: clamp(42px, 5.6vw, 58px); }
+
+  .human-map { top: 170px; bottom: auto; height: 1160px; }
+  .figure-aura { left: 24%; top: 37%; width: 560px; height: 560px; }
+  .map-figure.biohuman-figure { left: 22%; top: 130px; bottom: auto; height: 640px; }
+  .biohuman-figure + .neural-crown { left: 16.8%; top: 13%; }
+  .human-map .eye-beam { left: 22.5%; top: 19%; width: 14vw; }
+  .human-map .voice-beam { left: 22.2%; top: 22.5%; width: 13vw; }
+  .human-map .emg-trace { left: 12.5%; top: 36%; }
+  .human-map .heat-map { left: 19.7%; top: 41%; }
+
+  .translation-layer {
+    left: 45%;
+    right: 3%;
+    top: 40px;
+    width: auto;
+    height: 700px;
+    min-height: 0;
+    padding: 16px;
+    transform: none;
+  }
+  .compiler-stream {
+    grid-template-columns: 20px minmax(95px, 1fr) 50px 72px;
+    gap: 8px;
+  }
+  .compiler-stream::before { width: clamp(120px, 18vw, 210px); }
+  .compiler-stream > span em { font-size: 4.5px; }
+  .compiler-stream .map-wave { width: 50px; }
+
+  .translation-layer::after {
+    left: 50%;
+    top: 100%;
+    width: 2px;
+    height: 65px;
+    background: linear-gradient(var(--amber), rgba(255,178,70,.1));
+  }
+  .translation-layer .output-route { display: none; }
+  .robot-destination {
+    left: 59%;
+    right: auto;
+    top: 805px;
+    width: 250px;
+    height: 320px;
+    transform: translateX(-50%);
+  }
+  .robot-figure { transform: scale(.88); transform-origin: center top; }
+  .hero-note { left: 28px; bottom: 28px; }
+
+  .immersive-waitlist {
+    grid-template-columns: 1fr;
+    gap: 64px;
+    padding: 96px 48px;
+  }
+  .immersive-waitlist h2 { font-size: clamp(54px, 9vw, 78px); }
+  .immersive-form { max-width: 620px; }
+}
+
+/* Phones: a deliberate vertical story—human, compiler, robot. */
+@media (max-width: 767px) {
+  .immersive-hero { min-height: 1900px; }
+  .immersive-nav {
+    left: max(14px, env(safe-area-inset-left));
+    right: max(14px, env(safe-area-inset-right));
+    height: 64px;
+    grid-template-columns: 1fr auto;
+  }
+  .immersive-nav > p,
+  .immersive-logo span { display: none; }
+  .immersive-nav > a:last-child { display: inline-flex; align-items: center; }
+
+  .immersive-title {
+    left: max(18px, env(safe-area-inset-left));
+    right: max(18px, env(safe-area-inset-right));
+    top: 88px;
+    width: auto;
+  }
+  .immersive-title p { margin-bottom: 9px; }
+  .immersive-title h1 { font-size: clamp(40px, 12vw, 50px); line-height: .88; }
+
+  .human-map { top: 188px; bottom: auto; height: 1660px; }
+  .figure-aura { left: 50%; top: 17%; width: min(112vw, 450px); height: min(112vw, 450px); }
+  .map-figure.biohuman-figure { left: 50%; top: 8px; bottom: auto; width: auto; height: 560px; max-width: none; }
+  .biohuman-figure + .neural-crown { left: calc(50% - 58px); top: 1%; transform: scale(.78); }
+  .human-map .eye-beam,
+  .human-map .voice-beam,
+  .human-map .emg-trace { display: none; }
+  .human-map .heat-map { left: calc(50% - 28px); top: 24%; transform: scale(.78); }
+
+  .translation-layer {
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    top: 590px;
+    bottom: auto;
+    width: auto;
+    height: 650px;
+    min-height: 0;
+    padding: 14px;
+    transform: none;
+  }
+  .translation-layer .output-head { min-height: 36px; }
+  .compiler-streams { grid-template-rows: repeat(5, minmax(64px, 1fr)); }
+  .compiler-stream {
+    grid-template-columns: 20px minmax(86px, 1fr) 44px 68px;
+    gap: 6px;
+    min-height: 64px;
+    padding: 0 2px;
+  }
+  .compiler-stream::before,
+  .compiler-stream > i { display: none; }
+  .compiler-stream > span em { display: none; }
+  .compiler-stream .map-wave { display: flex; width: 42px; }
+  .compiler-stream > strong { font-size: 16px; }
+  .translation-layer .compiler-result { margin-top: 12px; padding: 13px; }
+  .compiler-result code { overflow: hidden; text-overflow: ellipsis; }
+  .translation-layer::before { display: none; }
+  .translation-layer::after {
+    left: 50%;
+    top: 100%;
+    width: 2px;
+    height: 70px;
+    background: linear-gradient(var(--amber), rgba(255,178,70,.1));
+  }
+  .translation-layer .output-route { display: none; }
+
+  .robot-destination {
+    left: 50%;
+    right: auto;
+    top: 1325px;
+    bottom: auto;
+    width: 220px;
+    height: 300px;
+    transform: translateX(-50%);
+  }
+  .robot-figure { transform: scale(.82); transform-origin: center top; }
+  .hero-note {
+    left: max(18px, env(safe-area-inset-left));
+    right: max(18px, env(safe-area-inset-right));
+    bottom: max(42px, env(safe-area-inset-bottom));
+    text-align: center;
+  }
+
+  .immersive-principles { grid-template-columns: 1fr; }
+  .immersive-principles p {
+    min-height: 104px;
+    padding: 24px 22px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(21,10,13,.2);
+  }
+
+  .immersive-waitlist {
+    display: block;
+    padding: 76px max(18px, env(safe-area-inset-left)) 82px;
+  }
+  .immersive-waitlist > div:first-child { margin-bottom: 56px; }
+  .immersive-waitlist h2 { font-size: clamp(42px, 13vw, 60px); line-height: .88; }
+  .immersive-form > div { grid-template-columns: minmax(0, 1fr) 72px; }
+  .immersive-form input { width: 100%; font-size: 16px; }
+  .immersive-form button { width: 72px; }
+
+  .immersive-footer {
+    min-height: 72px;
+    grid-template-columns: 1fr auto;
+    padding: 0 max(18px, env(safe-area-inset-right)) max(0px, env(safe-area-inset-bottom));
+  }
+  .immersive-footer p:first-of-type { display: none; }
+}
+
+/* Small phones retain readable values without squeezing the labels. */
+@media (max-width: 380px) {
+  .immersive-title h1 { font-size: 40px; }
+  .map-figure.biohuman-figure { height: 525px; }
+  .translation-layer { top: 555px; height: 635px; padding: 12px; }
+  .compiler-stream { grid-template-columns: 18px minmax(88px, 1fr) 64px; }
+  .compiler-stream .map-wave { display: none; }
+  .robot-destination { top: 1270px; }
+  .immersive-hero { min-height: 1810px; }
+  .human-map { height: 1560px; }
+}
+
+/* Landscape phones use the tablet composition but remain scrollable. */
+@media (max-width: 900px) and (max-height: 600px) and (orientation: landscape) {
+  .immersive-hero { min-height: 1180px; }
+  .immersive-title { top: 84px; width: 180px; }
+  .immersive-title h1 { font-size: 38px; }
+  .human-map { top: 145px; height: 960px; }
+  .map-figure.biohuman-figure { left: 23%; top: 90px; height: 520px; }
+  .biohuman-figure + .neural-crown { left: 17%; top: 9%; }
+  .human-map .heat-map { left: 20%; top: 37%; }
+  .translation-layer { left: 43%; right: 3%; top: 20px; width: auto; height: 620px; }
+  .compiler-stream { min-height: 54px; }
+  .robot-destination { left: 65%; top: 700px; }
+  .hero-note { bottom: 24px; }
+}
+
+@media (pointer: coarse) {
+  .compiler-stream { min-height: 56px; }
+  .compiler-stream:hover { background: transparent; }
+  .compiler-stream.active { background: linear-gradient(90deg,rgba(84,16,29,.48),rgba(84,16,29,.12)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compiler-stream,
+  .compiler-stream .map-wave i { transition: none; }
+}
+
+/* Compact compiler and fully bounded robot silhouette. */
+.translation-layer {
+  border-color: rgba(255,178,70,.42);
+  border-top-width: 1px;
+  box-shadow: 0 24px 70px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.025);
+}
+.translation-layer .output-head {
+  min-height: 34px;
+  align-items: center;
+}
+.translation-layer .compiler-result {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg,rgba(84,16,29,.32),rgba(21,10,13,.3));
+}
+.compiler-result code { margin: 7px 0 0; }
+.compiler-result p { margin-top: 6px; }
+
+.immersive-nav { grid-template-columns: 1fr auto; }
+.immersive-nav > a:last-child { grid-column: 2; }
+.h2m-wordmark {
+  color: var(--ivory);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.08em;
+}
+.h2m-wordmark b {
+  color: var(--coral);
+  font-family: inherit;
+  font-size: 1.2em;
+  font-weight: inherit;
+  line-height: 0;
+  vertical-align: -.03em;
+}
+.immersive-footer .h2m-wordmark { font-size: 18px; }
+.immersive-title { top: 14%; }
+.hero-definition {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  z-index: 16;
+  width: min(720px, 72vw);
+  margin: 0;
+  padding: 14px 22px;
+  border-top: 1px solid rgba(240,120,100,.55);
+  background: linear-gradient(90deg, transparent, rgba(84,16,29,.28), transparent);
+  color: var(--ivory);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  transform: translateX(-50%);
+}
+.hero-definition p { margin: 0; }
+.hero-definition > span {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 6px;
+  color: rgba(239,232,220,.48);
+  font-family: "SFMono-Regular",Consolas,monospace;
+  font-size: 5px;
+  font-weight: 500;
+  letter-spacing: .1em;
+}
+.hero-definition > span b { font-weight: 600; }
+
+.compiler-streams { gap: 0; }
+.compiler-stream {
+  grid-template-columns: minmax(72px, 1fr) 52px 76px;
+  gap: 10px;
+  padding: 0 4px;
+}
+.compiler-stream > span:not(.map-wave) { display: block; }
+.compiler-stream > span b { font-size: 9px; }
+.compiler-stream .map-wave { display: flex; width: 52px; height: 22px; }
+.compiler-stream > strong { font-size: 17px; }
+.compiler-stream > i { left: -20px; }
+.compiler-stream.active { box-shadow: inset 2px 0 var(--coral); }
+.compiler-result > small { font-size: 5px; }
+.compiler-result code { font-size: 8px; }
+
+.robot-destination {
+  right: 4%;
+  width: 190px;
+  overflow: visible;
+}
+.robot-figure { overflow: visible; }
+.robot-figure .robot-arm {
+  position: absolute;
+  top: 72px;
+  bottom: auto;
+  width: 19px;
+  height: 112px;
+  z-index: auto;
+  transform-origin: top center;
+}
+.robot-figure .robot-arm-left {
+  left: 17px;
+  right: auto;
+  transform: rotate(9deg);
+}
+.robot-figure .robot-arm-right {
+  left: auto;
+  right: 22px;
+  transform: rotate(-9deg);
+}
+
+.neural-crown:not(.active),
+.eye-beam:not(.active),
+.voice-beam:not(.active),
+.emg-trace:not(.active),
+.heat-map:not(.active) { opacity: .16; }
+
+.waitlist-trap {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0,0,0,0) !important;
+  white-space: nowrap !important;
+}
+.immersive-form button:disabled { cursor: wait; opacity: .68; }
+.immersive-form > small a { color: var(--wine); text-underline-offset: 2px; }
+.waitlist-error { margin: 10px 0 0; color: #8b1f31; font-size: 11px; }
+.immersive-footer > a {
+  color: rgba(239,232,220,.52);
+  font-family: "SFMono-Regular",Consolas,monospace;
+  font-size: 6px;
+  letter-spacing: .12em;
+  text-decoration: none;
+}
+.immersive-footer > a:hover { color: var(--coral); }
+
+.privacy-page {
+  min-height: 100svh;
+  padding: clamp(24px,5vw,72px);
+  background:
+    linear-gradient(rgba(239,232,220,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(239,232,220,.04) 1px,transparent 1px),
+    radial-gradient(circle at 70% 20%,#45131c 0,#17090d 48%,#10080a 100%);
+  background-size: 54px 54px,54px 54px,auto;
+  color: var(--ivory);
+}
+.privacy-back { color: var(--ivory); font-size: 20px; font-weight: 700; text-decoration: none; }
+.privacy-back span { color: var(--coral); font-size: 1.18em; }
+.privacy-page article { width: min(720px,100%); margin: clamp(70px,13vh,140px) auto 0; }
+.privacy-page article > p { color: var(--coral); font-family: "SFMono-Regular",Consolas,monospace; font-size: 7px; letter-spacing: .14em; }
+.privacy-page h1 { margin: 18px 0 64px; font-size: clamp(60px,10vw,116px); font-weight: 500; letter-spacing: -.075em; line-height: .82; }
+.privacy-page h1 em { color: var(--coral); font-family: Georgia,serif; font-weight: 400; }
+.privacy-page section { display: grid; grid-template-columns: 150px 1fr; gap: 30px; padding: 24px 0; border-top: 1px solid rgba(239,232,220,.16); }
+.privacy-page h2 { margin: 0; font-size: 13px; }
+.privacy-page section p { margin: 0; color: rgba(239,232,220,.66); font-size: 14px; line-height: 1.65; }
+
+@media (min-width: 1200px) {
+  .map-figure.biohuman-figure {
+    top: 50%;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+  }
+  .biohuman-figure + .neural-crown { top: 7.5%; }
+  .human-map .eye-beam { top: 13.5%; }
+  .human-map .voice-beam { top: 17%; }
+  .human-map .emg-trace { top: 34%; }
+  .human-map .heat-map { top: 39%; }
+  .translation-layer {
+    left: 50%;
+    top: 50%;
+    width: clamp(340px, 28vw, 400px);
+    height: 420px;
+    min-height: 0;
+    padding: 12px 14px;
+    transform: translateY(-50%);
+  }
+  .compiler-streams { grid-template-rows: repeat(5, 54px); }
+  .compiler-stream {
+    grid-template-columns: minmax(72px, 1fr) 52px 76px;
+    min-height: 54px;
+  }
+  .translation-layer .output-head { min-height: 32px; }
+  .translation-layer .compiler-result { min-height: 72px; }
+  .robot-destination {
+    top: 50%;
+    height: 420px;
+    transform: translateY(-50%);
+  }
+  .robot-destination .robot-figure {
+    align-self: center;
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 1199px) and (min-width: 768px) {
+  .immersive-title { top: 108px; }
+  .translation-layer { top: 120px; height: 440px; padding: 14px; }
+  .compiler-streams { grid-template-rows: repeat(5, 54px); }
+  .compiler-stream { grid-template-columns: minmax(70px, 1fr) 48px 72px; }
+  .robot-destination { top: 650px; }
+}
+
+@media (max-width: 767px) {
+  .immersive-hero { min-height: 1660px; }
+  .immersive-title { top: 88px; }
+  .human-map { height: 1430px; }
+  .translation-layer { top: 580px; height: 420px; }
+  .compiler-streams { grid-template-rows: repeat(5, 52px); }
+  .compiler-stream { min-height: 56px; }
+  .compiler-stream { grid-template-columns: minmax(70px, 1fr) 44px 68px; }
+  .robot-destination { top: 1080px; }
+  .hero-definition {
+    bottom: 28px;
+    width: calc(100% - 36px);
+    padding: 13px 10px;
+    font-size: 11px;
+  }
+  .hero-definition > span { gap: 8px; font-size: 4.5px; }
+  .immersive-footer { grid-template-columns: 1fr auto auto; gap: 20px; }
+  .immersive-footer p:first-of-type { display: block; }
+  .privacy-page article { margin-top: 72px; }
+  .privacy-page h1 { margin-bottom: 48px; }
+  .privacy-page section { grid-template-columns: 1fr; gap: 8px; }
+}
+
+@media (max-width: 380px) {
+  .immersive-hero { min-height: 1590px; }
+  .human-map { height: 1370px; }
+  .translation-layer { top: 550px; height: 410px; }
+  .robot-destination { top: 1030px; }
+}
+
+@media (max-width: 900px) and (max-height: 600px) and (orientation: landscape) {
+  .immersive-title { top: 84px; }
+  .translation-layer { top: 35px; height: 420px; }
+  .robot-destination { top: 520px; }
+}
