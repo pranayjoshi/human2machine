@@ -143,9 +143,22 @@ export type SafetyState = {
 export type MachineState = {
   state: string;
   previous_state?: string | null;
+  active_command_id?: string | null;
+  held_object_id?: string | null;
   target_object_id?: string | null;
   progress?: number;
+  objects?: VisionObject[];
+  stage?: string | null;
+  active_command?: {
+    command_id?: string;
+    action?: string;
+    target_object_id?: string | null;
+    idempotency_key?: string;
+  } | null;
+  robot_xy?: number[];
   fault_reason?: string | null;
+  last_outcome?: Record<string, unknown> | null;
+  health?: string;
 };
 
 export type ConfirmationState = {
@@ -178,6 +191,19 @@ export type BiosignalHealth = {
   last_sequence: number | null;
   shadow_only: boolean;
   sample_rate_hz: number | null;
+  flags?: string[];
+  components?: Record<string, number>;
+};
+
+export type ModalityFeature = {
+  feature_name: string;
+  label: string;
+  confidence: number;
+  candidate_scores?: Record<string, number>;
+  model_id?: string;
+  shadow_only?: boolean;
+  quality?: number | null;
+  updated_at_ms?: number;
 };
 
 export type LiveState = {
@@ -190,6 +216,10 @@ export type LiveState = {
   vision: VisionState | null;
   vision_preview?: { available: boolean; width: number; height: number; age_s: number | null };
   audio: AudioState | null;
+  features?: {
+    eeg: ModalityFeature | null;
+    emg: ModalityFeature | null;
+  };
   intent: IntentState | null;
   safety: SafetyState | null;
   machine: MachineState | null;

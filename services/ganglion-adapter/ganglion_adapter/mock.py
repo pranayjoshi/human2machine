@@ -60,6 +60,7 @@ class GanglionMockRuntime:
     acquisition: object | None = None
     models_dir: Path | None = None
     classifier: GestureClassifier | None = None
+    rest_only: bool = False
 
     sequence: int = 0
     started_ns: int = 0
@@ -101,6 +102,8 @@ class GanglionMockRuntime:
         else:
             self.classifier = self._reloader.classifier
         self.model_id = self.classifier.model_id
+        if self.rest_only and hasattr(self._acq, "script"):
+            self._acq.script = [("rest", 24 * 60 * 60)]
 
     def set_disconnected(self, disconnected: bool) -> None:
         was = self._acq.disconnected

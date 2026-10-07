@@ -191,9 +191,7 @@ class VisionHardwareRuntime:
         self.hand_landmarks = hand_landmarks
         self.face_landmarks = face_landmarks
         self._smoother = PointingSmoother(min_confidence=pointing_confidence_min)
-        stale_ms = (
-            DEFAULT_OBJECT_STALE_MS if object_stale_ms is None else float(object_stale_ms)
-        )
+        stale_ms = DEFAULT_OBJECT_STALE_MS if object_stale_ms is None else float(object_stale_ms)
         if object_stale_ms is None and config is not None:
             stale_ms = stale_ms_from_config(config)
         self.object_stale_ms = stale_ms

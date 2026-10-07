@@ -16,19 +16,21 @@ sys.path.insert(0, str(ROOT))
 
 from vision_adapter.color_detector import detect_colored_objects  # noqa: E402
 
-from tests.helpers.vision_images import EXPECTED_IDS  # noqa: E402
 from tests.end_to_end.test_milestone2_vision_objects import (  # noqa: E402
     RECALL_THRESHOLD,
     STATIONARY_FRAMES,
     _stationary_color_frame,
 )
+from tests.helpers.vision_images import EXPECTED_IDS  # noqa: E402
 
 
 def main() -> int:
     hits = 0
     expected = 0
     for index in range(STATIONARY_FRAMES):
-        found = {item["object_id"] for item in detect_colored_objects(_stationary_color_frame(index))}
+        found = {
+            item["object_id"] for item in detect_colored_objects(_stationary_color_frame(index))
+        }
         for object_id in EXPECTED_IDS:
             expected += 1
             if object_id in found:

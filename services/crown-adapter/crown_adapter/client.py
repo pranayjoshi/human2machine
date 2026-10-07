@@ -88,7 +88,11 @@ def log_progress(message: str) -> None:
 def public_exception_text(exc: BaseException) -> str:
     parts = [type(exc).__name__]
     response = getattr(exc, "response", None)
-    status = getattr(response, "status_code", None) if response is not None else getattr(exc, "code", None)
+    status = (
+        getattr(response, "status_code", None)
+        if response is not None
+        else getattr(exc, "code", None)
+    )
     if status is not None:
         parts.append(f"HTTP {status}")
     url = ""
@@ -217,7 +221,9 @@ def prune_stale_device_nodes(sdk: Any) -> None:
         if client_id == ours:
             continue
         try:
-            db.child("devices").child(device_id).child("clients").child(str(client_id)).remove(token)
+            db.child("devices").child(device_id).child("clients").child(str(client_id)).remove(
+                token
+            )
             removed += 1
         except Exception:
             pass
@@ -397,9 +403,7 @@ class NeurosityPythonClient(CrownClient):
         except CrownAuthError:
             raise
         except Exception as exc:
-            raise CrownAuthError(
-                f"brainwaves_raw failed ({public_exception_text(exc)})"
-            ) from exc
+            raise CrownAuthError(f"brainwaves_raw failed ({public_exception_text(exc)})") from exc
         log_progress("subscribed to brainwaves_raw")
         try:
             accel_seen = {"n": 0}

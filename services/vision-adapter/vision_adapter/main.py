@@ -6,15 +6,20 @@ import time
 from pathlib import Path
 
 from intent_runtime.config import load_stacked_config
+from intent_runtime.logging import configure_logging
 
 from vision_adapter.protobuf_compat import patch_protobuf_get_prototype
 
 patch_protobuf_get_prototype()
 
-from vision_adapter.camera import LatestFrameCamera, VisionHardwareRuntime, list_cameras
-from vision_adapter.color_detector import DEFAULT_CATALOG
-from vision_adapter.mock import VisionMockRuntime
-from vision_adapter.publisher import BoundedAdapterPush, ListSink
+from vision_adapter.camera import (  # noqa: E402
+    LatestFrameCamera,
+    VisionHardwareRuntime,
+    list_cameras,
+)
+from vision_adapter.color_detector import DEFAULT_CATALOG  # noqa: E402
+from vision_adapter.mock import VisionMockRuntime  # noqa: E402
+from vision_adapter.publisher import BoundedAdapterPush, ListSink  # noqa: E402
 
 
 def find_repo_root() -> Path:
@@ -39,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | None = None) -> int:
+    configure_logging("vision-adapter")
     args = build_parser().parse_args(argv)
     mock = not args.hardware
     config = load_stacked_config(find_repo_root() / "configs")

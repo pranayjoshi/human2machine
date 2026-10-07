@@ -19,16 +19,34 @@ for extra in (
 ):
     sys.path.insert(0, str(extra))
 
-from fusion_runtime.engine import FusionConfig, FusionRuntimeState, UserProfile, step
-from intent_contracts.enums import EventType, MachineState, OutcomeKind, SafetyVerdict
-from intent_contracts.events import IntentDecisionPayload
-from robot_simulator.adapter import SimulatedClock, SimulatorMachineAdapter, SimulatorSettings
-from safety_gateway.policy import SafetyState, apply_event, evaluate, safety_config_from_mapping
+from fusion_runtime.engine import (  # noqa: E402
+    FusionConfig,
+    FusionRuntimeState,
+    UserProfile,
+    step,
+)
+from intent_contracts.enums import (  # noqa: E402
+    EventType,
+    MachineState,
+    OutcomeKind,
+    SafetyVerdict,
+)
+from intent_contracts.events import IntentDecisionPayload  # noqa: E402
+from robot_simulator.adapter import (  # noqa: E402
+    SimulatedClock,
+    SimulatorMachineAdapter,
+    SimulatorSettings,
+)
+from safety_gateway.policy import (  # noqa: E402
+    SafetyState,
+    apply_event,
+    evaluate,
+    safety_config_from_mapping,
+)
 
-from tests.unit.fusion_runtime.test_engine import (
+from tests.unit.fusion_runtime.test_engine import (  # noqa: E402
     HAPPY_WINDOW,
     audio_intent,
-    emg_feature,
     machine_ready,
     session_started,
     vision_objects,
@@ -131,7 +149,11 @@ def test_spoken_pointed_conflict_asks_confirmation() -> None:
     decision = decisions[-1]
     assert decision.conflicts or decision.confidence < 0.92
     result = evaluate(decision, _safety_state(), _policy(), now_ns=NOW_NS)
-    assert result.verdict in {SafetyVerdict.ASK_CONFIRMATION, SafetyVerdict.HOLD, SafetyVerdict.REJECT}
+    assert result.verdict in {
+        SafetyVerdict.ASK_CONFIRMATION,
+        SafetyVerdict.HOLD,
+        SafetyVerdict.REJECT,
+    }
     assert result.command is None
 
 

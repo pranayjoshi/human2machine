@@ -11,7 +11,7 @@ import {
   IntentDecisionPayloadSchema,
   SafetyDecisionPayloadSchema,
   unitInterval,
-} from "./index.ts";
+} from "./index.js";
 
 const fixtureDir = join(
   dirname(fileURLToPath(import.meta.url)),

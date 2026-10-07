@@ -85,6 +85,35 @@ def test_snapshot_tracks_biosignal_chunk_and_sequence_gap(mock_app) -> None:
     assert eeg["last_sequence"] == 5
     assert eeg["quality"] == 0.25
     assert eeg["sample_rate_hz"] == 256.0
+    assert eeg["flags"] == ["sequence_gap"]
+    assert eeg["components"] == {"sequence_integrity": 0.0}
+
+
+def test_snapshot_exposes_latest_human_readable_features(mock_app) -> None:
+    runtime = mock_app.state.runtime
+    runtime.ingest_event(
+        {
+            "event_id": "emgfeature000001",
+            "event_type": "modality.feature",
+            "source": "ganglion-adapter",
+            "modality": "emg",
+            "quality": 0.88,
+            "payload": {
+                "feature_name": "emg_gesture",
+                "label": "confirm",
+                "confidence": 0.91,
+                "candidate_scores": {"rest": 0.04, "confirm": 0.91, "cancel": 0.05},
+                "model_id": "emg-personal-v1",
+                "shadow_only": True,
+            },
+        }
+    )
+
+    feature = runtime.snapshot()["features"]["emg"]
+    assert feature["label"] == "confirm"
+    assert feature["confidence"] == 0.91
+    assert feature["quality"] == 0.88
+    assert feature["updated_at_ms"] > 0
 
 
 def test_snapshot_exposes_audio_mic_level(mock_app) -> None:

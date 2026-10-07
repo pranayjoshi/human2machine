@@ -148,7 +148,9 @@ def test_two_close_targets_return_ranked_candidates() -> None:
         {"object_id": "object_yellow_1", "table_position_xy": [0.82, 0.82]},
     ]
     mcp, tip = _aim_ray([0.44, 0.51], np.random.default_rng(3))
-    candidates, hands = pointing_from_index_ray(mcp, tip, objects, IMAGE_SIZE, landmark_confidence=0.9)
+    candidates, hands = pointing_from_index_ray(
+        mcp, tip, objects, IMAGE_SIZE, landmark_confidence=0.9
+    )
     assert hands["pointing"] is True
     assert len(candidates) >= 2
     assert candidates[0]["confidence"] >= candidates[1]["confidence"]

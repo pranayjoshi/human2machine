@@ -5,7 +5,6 @@ from typing import Any
 
 import zmq
 import zmq.asyncio
-
 from intent_contracts.envelope import EventEnvelope
 
 

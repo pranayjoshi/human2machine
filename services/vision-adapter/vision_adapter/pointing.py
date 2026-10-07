@@ -17,7 +17,9 @@ DEFAULT_EMA_ALPHA = 0.55
 DEFAULT_SCORE_DECAY = 0.62
 
 
-def empty_hands(*, landmark_confidence: float = 0.0, handedness: str | None = "right") -> dict[str, Any]:
+def empty_hands(
+    *, landmark_confidence: float = 0.0, handedness: str | None = "right"
+) -> dict[str, Any]:
     return {
         "handedness": handedness,
         "landmark_confidence": float(landmark_confidence),

@@ -178,6 +178,7 @@ class ConsoleRuntime:
         self.estop_latched = False
         self.vision: dict[str, Any] | None = None
         self.audio: dict[str, Any] | None = None
+        self.features: dict[str, dict[str, Any] | None] = {"eeg": None, "emg": None}
         self.intent: dict[str, Any] | None = None
         self.safety: dict[str, Any] | None = None
         self.machine: dict[str, Any] | None = None
@@ -404,6 +405,9 @@ class ConsoleRuntime:
         if event_type == EventType.DATA_QUALITY:
             self._apply_data_quality(raw, payload)
             return
+        if event_type == EventType.MODALITY_FEATURE:
+            self._apply_modality_feature(raw, payload)
+            return
         if event_type == EventType.VISION_OBJECTS:
             self.vision = payload
             return
@@ -623,14 +627,31 @@ class ConsoleRuntime:
         flags = payload.get("flags") or []
         if isinstance(flags, list):
             named = {str(flag) for flag in flags}
+            health["flags"] = sorted(named)
             if SEQUENCE_ANOMALY_FLAGS.intersection(named):
                 health["sequence_gaps"] = int(health.get("sequence_gaps") or 0) + 1
+        components = payload.get("components")
+        if isinstance(components, dict):
+            health["components"] = dict(components)
         seq = payload.get("sequence")
         if seq is not None:
             try:
                 health["last_sequence"] = int(seq)
             except (TypeError, ValueError):
                 pass
+
+    def _apply_modality_feature(self, raw: dict[str, Any], payload: dict[str, Any]) -> None:
+        stream = self._biosignal_stream_key(
+            raw.get("source"),
+            raw.get("modality"),
+            payload.get("feature_name"),
+        )
+        if stream is None:
+            return
+        feature = dict(payload)
+        feature["quality"] = raw.get("quality")
+        feature["updated_at_ms"] = int(time.time() * 1000)
+        self.features[stream] = feature
 
     def _push_timeline(self, kind: str, label: str, payload: dict[str, Any]) -> None:
         self.timeline.appendleft(
@@ -813,9 +834,7 @@ class ConsoleRuntime:
                 elif detail:
                     message = f"Degraded: {detail}."
                 else:
-                    message = (
-                        f"Degraded after missed heartbeats ({view['missed_heartbeats']})."
-                    )
+                    message = f"Degraded after missed heartbeats ({view['missed_heartbeats']})."
                 recovery = view["recovery"]
             else:
                 message = "Offline or never seen."
@@ -886,6 +905,10 @@ class ConsoleRuntime:
                 "vision": self.vision,
                 "vision_preview": self._vision_preview_status(),
                 "audio": self.audio,
+                "features": {
+                    "eeg": dict(self.features["eeg"]) if self.features["eeg"] else None,
+                    "emg": dict(self.features["emg"]) if self.features["emg"] else None,
+                },
                 "intent": self.intent,
                 "safety": self.safety,
                 "machine": self.machine,
@@ -947,6 +970,8 @@ class ConsoleRuntime:
             "last_sequence": health.get("last_sequence"),
             "shadow_only": True,
             "sample_rate_hz": health.get("sample_rate_hz"),
+            "flags": list(health.get("flags") or []),
+            "components": dict(health.get("components") or {}),
         }
 
     @staticmethod

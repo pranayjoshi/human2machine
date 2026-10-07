@@ -7,15 +7,20 @@ import { StatusPill } from "@/components/Status";
 import { API_BASE, api } from "@/lib/api";
 import type { SetupStatus } from "@/lib/types";
 
-function ConfigFlag({ label, set }: { label: string; set: boolean }) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd>
-        <StatusPill status={set ? "healthy" : "offline"} label={set ? "Set" : "Not set"} />
-      </dd>
-    </div>
-  );
+const DEVICE_COPY: Record<string, { role: string; next: string }> = {
+  crown: { role: "EEG quality and artifact monitoring", next: "Fit the headset and confirm clean channels." },
+  ganglion: { role: "Forearm gesture recognition", next: "Connect four channels, then calibrate your gestures." },
+  audio: { role: "Spoken request recognition", next: "Choose the microphone and speak a short command." },
+  vision: { role: "Object and pointing detection", next: "Frame the table and keep all objects visible." },
+  simulator: { role: "Safe machine outcome preview", next: "Runs locally; physical motion remains disabled." },
+};
+
+function keyFor(id: string): string {
+  if (id.includes("crown")) return "crown";
+  if (id.includes("ganglion")) return "ganglion";
+  if (id.includes("audio")) return "audio";
+  if (id.includes("vision")) return "vision";
+  return "simulator";
 }
 
 export default function SetupPage() {
@@ -23,166 +28,64 @@ export default function SetupPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void api
-      .setup()
-      .then(setSetup)
-      .catch((err: Error) => setError(err.message));
+    void api.setup().then(setSetup).catch((reason: Error) => setError(reason.message));
   }, []);
 
   return (
     <>
-      <h1>Device setup</h1>
-      <p className="lede">
-        Connect Crown, Ganglion, microphone, camera, and the robot simulator. This page summarizes{" "}
-        <code>docs/multimodal-intent-compiler/03_DEVICE_CONNECTION.md</code>. Hardware is opt-in;
-        the mock stack does not need any of this.
-      </p>
-      <div className="mode-banner simulator" role="status" style={{ display: "inline-block", marginBottom: "1rem" }}>
-        Simulator mode — no physical robot armed
-      </div>
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Hardware</p>
+          <h1>Devices</h1>
+          <p className="lede">A simple view of the sensors in the loop and what each one contributes.</p>
+        </div>
+        <Link className="btn btn-primary" href="/calibrate">Open calibration</Link>
+      </header>
+
       {error ? <p className="error">{error}</p> : null}
+
+      <div className="device-grid">
+        {(setup?.checklist ?? []).map((item) => {
+          const copy = DEVICE_COPY[keyFor(item.id)] ?? DEVICE_COPY.simulator;
+          return (
+            <article className="panel device-card" key={item.id}>
+              <header>
+                <span className="device-number">{String((setup?.checklist ?? []).indexOf(item) + 1).padStart(2, "0")}</span>
+                <StatusPill status={item.configured ? "healthy" : "offline"} label={item.configured ? "Ready" : "Needs setup"} />
+              </header>
+              <h2>{item.name}</h2>
+              <p>{copy.role}</p>
+              <small>{item.configured ? item.detail : copy.next}</small>
+            </article>
+          );
+        })}
+      </div>
+
+      {!setup ? <p className="muted">Checking device configuration…</p> : null}
+
       {setup ? (
-        <>
-          <section className="panel callout" aria-labelledby="secrets-heading">
-            <h2 id="secrets-heading">Config stays on disk</h2>
-            <p>
-              This browser never stores passwords, tokens, or emails. Edit{" "}
-              <code>configs/local.yaml</code> for Ganglion transport, camera index,
-              and mic name. Then restart the affected adapter.
-            </p>
-            <ul>
-              {(setup.operator_notes ?? []).map((note) => (
-                <li key={note}>{note}</li>
-              ))}
-            </ul>
-          </section>
-          <section className="panel" aria-labelledby="checklist-heading" style={{ marginTop: "1rem" }}>
-            <h2 id="checklist-heading">Config keys (from GET /api/setup)</h2>
-            <ul className="checklist">
-              {(setup.checklist ?? []).map((item) => (
-                <li key={item.id} className="check-item">
-                  <div>
-                    <StatusPill
-                      status={item.configured ? "healthy" : "offline"}
-                      label={item.configured ? "Configured" : "Missing"}
-                    />
-                    <div>
-                      <strong>{item.name}</strong>
-                    </div>
-                  </div>
-                  <div>{item.detail}</div>
-                </li>
-              ))}
-            </ul>
-            <dl className="kv" style={{ marginTop: "1rem" }}>
-              <ConfigFlag label="Crown OSC path ready" set={setup.crown.env_vars_present} />
-              <ConfigFlag label="Ganglion serial_port set" set={setup.ganglion.serial_port_set} />
-              <ConfigFlag
-                label="Ganglion Bluetooth (native BLE)"
-                set={Boolean(setup.ganglion.ble_configured)}
-              />
-              <ConfigFlag label="Audio device_name set" set={setup.audio.device_name_set} />
-              <div>
-                <dt>Camera index</dt>
-                <dd>{setup.vision.camera_index ?? "unset"}</dd>
-              </div>
-              <div>
-                <dt>EEG shadow-only</dt>
-                <dd>{setup.eeg_shadow_only ? "yes — never drives action" : "unexpected"}</dd>
-              </div>
-              <div>
-                <dt>EMG shadow-only (Milestone 1)</dt>
-                <dd>{setup.emg_shadow_only ? "yes — does not drive action" : "unexpected"}</dd>
-              </div>
-              <div>
-                <dt>EMG shadow-only (Milestone 1)</dt>
-                <dd>
-                  {setup.emg_shadow_only
-                    ? "yes — recorded, does not drive action yet"
-                    : "unexpected"}
-                </dd>
-              </div>
-              <div>
-                <dt>Mock console-api</dt>
-                <dd>{setup.mock ? "yes" : "no"}</dd>
-              </div>
+        <details className="technical-details" style={{ marginTop: "14px" }}>
+          <summary>Connection details</summary>
+          <div className="setup-detail-grid">
+            <dl className="kv">
+              <div><dt>Mode</dt><dd>{setup.mock ? "Simulation" : "Live hardware"}</dd></div>
+              <div><dt>Ganglion transport</dt><dd>{setup.ganglion.transport ?? "Not set"}</dd></div>
+              <div><dt>Camera</dt><dd>{setup.vision.camera_index ?? "—"} · {setup.vision.width}×{setup.vision.height}</dd></div>
+              <div><dt>Audio sample rate</dt><dd>{setup.audio.sample_rate_hz ?? "—"} Hz</dd></div>
+              <div><dt>EEG control</dt><dd>{setup.eeg_shadow_only ? "Monitoring only" : "Review configuration"}</dd></div>
+              <div><dt>EMG control</dt><dd>{setup.emg_shadow_only ? "Monitoring only" : "Enabled after calibration"}</dd></div>
             </dl>
-          </section>
-          <div className="grid-2" style={{ marginTop: "1rem" }}>
-            <section className="panel">
-              <h2>Neurosity Crown</h2>
-              <p>Charge, fit, same Wi-Fi as this Mac. Enable OSC in the Neurosity console.</p>
-              <p className="muted">
-                Enable OSC in the Neurosity console. BrainFlow listens on UDP 9000; no headset IP
-                is required. EEG is shadow-only.
-              </p>
-            </section>
-            <section className="panel">
-              <h2>OpenBCI Ganglion</h2>
-              <p>Charge the approved battery before electrodes. Never wear it while charging.</p>
-              <p className="muted">
-                EMG is shadow-only for Milestone 1 and does not drive action. For Bluetooth, set{" "}
-                <code>devices.ganglion.transport: ble</code> and run{" "}
-                <code>python -m ganglion_adapter.main --hardware --list-devices</code>. USB dongle
-                still uses <code>devices.ganglion.serial_port</code>.
-              </p>
-            </section>
-            <section className="panel">
-              <h2>Microphone</h2>
-              <p>
-                Constrained vocabulary: give me / hand me / select / confirm / cancel / stop, plus
-                named colors or deictic “that one”.
-              </p>
-              <p className="muted">
-                List devices with ffmpeg or <code>python -m audio_adapter.main --hardware --list-devices</code>.
-              </p>
-            </section>
-            <section className="panel">
-              <h2>Camera</h2>
-              <p>
-                Frame the full table. Four objects: blue, red, green, yellow. Mark table corners.
-                This adapter does not claim eye-gaze tracking.
-              </p>
-              <p className="muted">
-                Object IDs: {(setup.vision.object_ids ?? []).join(", ")}. Camera index{" "}
-                {setup.vision.camera_index ?? "unset"} at {setup.vision.width}×{setup.vision.height}.
-              </p>
-            </section>
-            <section className="panel">
-              <h2>Robot simulator</h2>
-              <p>
-                Always on for the MVP. Consumes only approved action commands on port 5557. There is
-                no hidden toggle for the SO-ARM.
-              </p>
-              <p className="muted">Machine mode: {setup.machine_mode}</p>
-            </section>
-            <section className="panel">
-              <h2>Ports</h2>
-              <dl className="kv">
-                {Object.entries(setup.ports).map(([name, value]) => (
-                  <div key={name}>
-                    <dt>{name}</dt>
-                    <dd>{String(value)}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
+            <div>
+              <p className="eyebrow">Operator guide</p>
+              {(setup.links ?? []).map((link) => (
+                <a className="doc-link" key={link.path} href={`${API_BASE}${link.url}`} target="_blank" rel="noreferrer">
+                  {link.title} →
+                </a>
+              ))}
+            </div>
           </div>
-          <p className="lede" style={{ marginTop: "1rem" }}>
-            {(setup.links ?? []).map((link) => (
-              <span key={link.path}>
-                <a href={`${API_BASE}${link.url}`} target="_blank" rel="noreferrer">
-                  {link.title}
-                </a>{" "}
-                (<code>{link.path}</code>){" · "}
-              </span>
-            ))}
-            Guided calibration: <Link href="/calibrate">Calibration</Link>
-          </p>
-        </>
-      ) : (
-        <p className="muted">Loading setup checklist…</p>
-      )}
+        </details>
+      ) : null}
     </>
   );
 }

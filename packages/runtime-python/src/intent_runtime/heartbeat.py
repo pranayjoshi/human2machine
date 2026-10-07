@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from intent_contracts.enums import PRODUCER_VERSION, SCHEMA_VERSION, DeviceHealth, EventType
 from intent_contracts.envelope import EventEnvelope, new_event_id, now_monotonic_ns
-from intent_contracts.enums import DeviceHealth, EventType, PRODUCER_VERSION, SCHEMA_VERSION
 
 
 def heartbeat_event(

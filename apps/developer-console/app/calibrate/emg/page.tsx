@@ -45,27 +45,23 @@ export default function EmgCalibratePage() {
 
   return (
     <>
-      <h1>EMG calibration</h1>
-      <p className="lede">
-        Ganglion forearm gestures only. Map four channels (flexor, extensor, pronator, aux).{" "}
-        <strong>EEG is not used here</strong> and does not label these blocks. A single classified
-        window never becomes a gesture — live inference uses dwell, hysteresis, and a refractory
-        period.
-      </p>
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Ganglion · gesture model</p>
+          <h1>Teach it your gestures.</h1>
+          <p className="lede">Build a personal confirm and cancel model from a short guided recording.</p>
+        </div>
+      </header>
       <section className="panel phase-banner" aria-live="polite">
-        <p className="muted">Current phase</p>
-        <p className="big-action">{phase}</p>
+        <p className="eyebrow">Current step</p>
+        <p className="big-action">{phase.replaceAll("_", " ")}</p>
         <p>{status?.instruction ?? "Start the protocol when electrodes are seated."}</p>
         {phase === "random" && status?.prompt_label ? (
           <p className="big-action">Do {status.prompt_label}</p>
         ) : null}
-        <p>
-          Windows — rest {balance.rest ?? 0}, confirm {balance.confirm ?? 0}, cancel {balance.cancel ?? 0}
-          {status?.window_count != null ? ` · total ${status.window_count}` : ""}
-        </p>
-        <p>
-          Repetitions — confirm {status?.counts?.confirm ?? 0} / 20, cancel {status?.counts?.cancel ?? 0} /
-          20, random {status?.counts?.random ?? 0} / 20
+        <p className="muted">
+          Samples · rest {balance.rest ?? 0} · confirm {balance.confirm ?? 0} · cancel {balance.cancel ?? 0}
+          {status?.window_count != null ? ` · ${status.window_count} total` : ""}
         </p>
         {phase === "rest" && status?.target_seconds ? (
           <p>
@@ -253,10 +249,7 @@ export default function EmgCalibratePage() {
           Refresh status
         </button>
       </div>
-      <p className="muted">
-        Phase order: {PHASE_ORDER.join(" → ")}. Promoted models live under <code>models/emg/</code> with{" "}
-        <code>metadata.json</code> — never commit biometric recordings.
-      </p>
+      <p className="muted">Protocol: {PHASE_ORDER.join(" → ").replaceAll("_", " ")}.</p>
     </>
   );
 }

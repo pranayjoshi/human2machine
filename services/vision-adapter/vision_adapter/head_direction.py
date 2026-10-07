@@ -118,7 +118,9 @@ def yaw_pitch_from_landmarks(
     face_width = float(np.linalg.norm(right_eye - left_eye))
     if face_width < 1e-6:
         return (0.0, 0.0, 0.0)
-    if image_size is not None and all(0.0 <= value <= 1.0 for value in (*nose, *left_eye, *right_eye)):
+    if image_size is not None and all(
+        0.0 <= value <= 1.0 for value in (*nose, *left_eye, *right_eye)
+    ):
         width, height = image_size
         scale = np.array([max(width, 1), max(height, 1)], dtype=float)
         nose = nose * scale

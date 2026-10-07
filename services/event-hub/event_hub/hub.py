@@ -387,10 +387,7 @@ class EventHub:
                     },
                 )
                 computed = last
-            elif (
-                str(envelope.event_type) in _CLOCK_LEAP_TYPES
-                and computed - last > CLOCK_LEAP_NS
-            ):
+            elif str(envelope.event_type) in _CLOCK_LEAP_TYPES and computed - last > CLOCK_LEAP_NS:
                 leap_ns = computed - last
                 self.metrics.clock_jumps += 1
                 self._log.warning(

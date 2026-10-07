@@ -9,6 +9,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from intent_runtime.config import load_stacked_config
+from intent_runtime.logging import configure_logging
 
 from crown_adapter.brainflow_client import (
     BrainFlowCrownClient,
@@ -81,6 +82,7 @@ def _crown_config(raw: dict) -> CrownConfig:
 
 
 def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | None = None) -> int:
+    configure_logging("crown-adapter")
     args = build_parser().parse_args(argv)
     mock = not args.hardware
     root = find_repo_root()

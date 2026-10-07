@@ -1,8 +1,8 @@
+import json
 from pathlib import Path
 
 from intent_contracts.commands import ActionCommand
 from intent_contracts.validation import parse_event
-import json
 
 FIXTURES = Path("data/fixtures/events")
 

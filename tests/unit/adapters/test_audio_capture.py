@@ -287,7 +287,9 @@ def test_empty_asr_is_visible_as_device_status() -> None:
     )
     events = runtime.ingest_block(_tone_and_silence(), 1_000_000_000)
     statuses = [event for event in events if event.event_type == "device.status"]
-    assert any("ASR returned no words" in str(event.payload.get("detail", "")) for event in statuses)
+    assert any(
+        "ASR returned no words" in str(event.payload.get("detail", "")) for event in statuses
+    )
     assert not [event for event in events if event.event_type == "audio.intent_candidate"]
 
 

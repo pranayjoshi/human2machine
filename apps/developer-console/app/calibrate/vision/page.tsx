@@ -2,99 +2,93 @@
 
 import { useEffect, useState } from "react";
 
-import { api } from "@/lib/api";
-import { useBusyAction } from "@/lib/live";
+import { StatusPill } from "@/components/Status";
+import { API_BASE, api } from "@/lib/api";
+import { useBusyAction, useLive } from "@/lib/live";
 import type { SetupStatus } from "@/lib/types";
 
-const OBJECTS = [
-  { id: "object_blue_1", label: "blue block" },
-  { id: "object_red_1", label: "red block" },
-  { id: "object_green_1", label: "green block" },
-  { id: "object_yellow_1", label: "yellow block" },
-];
-
 export default function VisionCalibratePage() {
+  const { snapshot } = useLive();
   const [setup, setSetup] = useState<SetupStatus | null>(null);
   const [complete, setComplete] = useState(false);
+  const [tick, setTick] = useState(0);
   const { busy, message, run } = useBusyAction();
 
   useEffect(() => {
     void api.setup().then(setSetup).catch(() => undefined);
+    const id = window.setInterval(() => setTick((value) => value + 1), 500);
+    return () => window.clearInterval(id);
   }, []);
 
-  const cameraIndex = setup?.vision.camera_index ?? "unset";
-  const ids = setup?.vision.object_ids ?? OBJECTS.map((item) => item.id);
+  const vision = snapshot?.vision;
+  const preview = snapshot?.vision_preview;
+  const pointed = vision?.pointing_candidates?.[0];
 
   return (
     <>
-      <h1>Vision calibration</h1>
-      <p className="lede">
-        This adapter reports objects, pointing, and coarse head direction. It does not claim
-        eye-gaze tracking. A calibration saved at a different resolution must be redone.
-      </p>
-      <section className="panel">
-        <h2>Camera</h2>
-        <p>
-          Index from <code>configs/local.yaml</code>: <strong>{String(cameraIndex)}</strong>
-          {setup?.vision.width
-            ? ` · ${setup.vision.width}×${setup.vision.height} @ ${setup.vision.fps} fps`
-            : ""}
-        </p>
-        <p className="muted">
-          Grant Camera permission to Terminal / VS Code. Close Zoom or Photo Booth if frames are
-          black. Change the index on disk, not in this browser.
-        </p>
-      </section>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h2>Workspace</h2>
-        <ol className="steps">
-          <li>Fix the camera so the full table is visible.</li>
-          <li>Mark table corners for workspace / homography calibration.</li>
-          <li>Use consistent lighting. Avoid capturing other people in the background.</li>
-        </ol>
-      </section>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h2>Four object IDs</h2>
-        <ul>
-          {OBJECTS.map((item) => (
-            <li key={item.id}>
-              <code>{item.id}</code> — {item.label}
-              {ids.includes(item.id) ? "" : " (not in current config)"}
-            </li>
-          ))}
-        </ul>
-        <p className="muted">Prefer ArUco markers if color IDs swap under changing light.</p>
-      </section>
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h2>Pointing test</h2>
-        <ol className="steps">
-          <li>Point clearly at the blue block, then red, green, and yellow.</li>
-          <li>Confirm the live session overlay lists the matching pointing candidate.</li>
-          <li>If no candidate appears, hand confidence is below threshold — that is correct.</li>
-        </ol>
-      </section>
-      {message ? <p className="error">{message}</p> : null}
-      {complete ? (
-        <p role="status">
-          Acknowledgement recorded: vision calibration completed for this console-api process.
-        </p>
-      ) : (
-        <div className="btn-row">
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy}
-            onClick={() =>
-              run(async () => {
-                await api.visionCalibrateComplete();
-                setComplete(true);
-              })
-            }
-          >
-            I completed calibration
-          </button>
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Camera · workspace</p>
+          <h1>Frame the interaction.</h1>
+          <p className="lede">Keep the table stable, every object visible, and the pointing area unobstructed.</p>
         </div>
-      )}
+        <StatusPill status={preview?.available ? "healthy" : "offline"} label={preview?.available ? "Camera live" : "No preview"} />
+      </header>
+
+      <div className="live-grid">
+        <section className="panel">
+          <div className="camera">
+            <div className="camera-stage">
+              {preview?.available ? (
+                <img
+                  src={`${API_BASE}/api/vision/preview?t=${tick}`}
+                  alt="Live calibration camera"
+                  width={preview.width}
+                  height={preview.height}
+                />
+              ) : null}
+            </div>
+          </div>
+          <p className="camera-caption">
+            {vision?.objects?.length ?? 0} objects visible
+            {pointed ? ` · pointing toward ${pointed.object_id.replace(/^object_/, "").replace(/_1$/, "")}` : ""}
+          </p>
+        </section>
+
+        <section className="panel">
+          <p className="eyebrow">Alignment</p>
+          <h2>Workspace check</h2>
+          <ol className="steps">
+            <li>Fix the camera so the full table stays in frame.</li>
+            <li>Place the blue, red, green, and yellow objects apart.</li>
+            <li>Point to each object and check that the target follows.</li>
+            <li>Repeat after any camera or lighting change.</li>
+          </ol>
+          <dl className="kv">
+            <div><dt>Camera</dt><dd>{setup?.vision.camera_index ?? "—"}</dd></div>
+            <div><dt>Resolution</dt><dd>{setup?.vision.width ?? "—"} × {setup?.vision.height ?? "—"}</dd></div>
+            <div><dt>Objects</dt><dd>{vision?.objects?.length ?? 0} / 4</dd></div>
+            <div><dt>Pointing confidence</dt><dd>{pointed ? `${Math.round(pointed.confidence * 100)}%` : "—"}</dd></div>
+          </dl>
+        </section>
+      </div>
+
+      {message ? <p className="error">{message}</p> : null}
+      <div className="btn-row">
+        <button
+          type="button"
+          className={`btn ${complete ? "" : "btn-primary"}`}
+          disabled={busy || complete}
+          onClick={() =>
+            run(async () => {
+              await api.visionCalibrateComplete();
+              setComplete(true);
+            })
+          }
+        >
+          {complete ? "Workspace saved" : "Use this workspace"}
+        </button>
+      </div>
     </>
   );
 }

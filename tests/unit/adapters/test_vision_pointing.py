@@ -75,10 +75,13 @@ def test_smoother_ema_and_clears_on_low_confidence() -> None:
     )
     assert 0.60 < second[0]["confidence"] < 0.80
     assert smoother.update([], landmark_confidence=0.2) == []
-    assert smoother.update(
-        [{"object_id": "object_blue_1", "confidence": 0.90}],
-        landmark_confidence=0.2,
-    ) == []
+    assert (
+        smoother.update(
+            [{"object_id": "object_blue_1", "confidence": 0.90}],
+            landmark_confidence=0.2,
+        )
+        == []
+    )
 
 
 def test_two_close_targets_return_ranked_candidates() -> None:

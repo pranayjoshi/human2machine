@@ -178,7 +178,14 @@ def build_scenario_events(
     return events
 
 
-def demo_passed(verdict: str | None, outcome: str | None, scenario: str) -> bool:
+def demo_passed(
+    verdict: str | None,
+    outcome: str | None,
+    scenario: str,
+    *,
+    action: str | None = None,
+    reason_codes: list[str] | None = None,
+) -> bool:
     verdict_u = (verdict or "").upper()
     outcome_u = (outcome or "").upper()
     if verdict_u == "ASK_CONFIRMATION":
@@ -188,6 +195,15 @@ def demo_passed(verdict: str | None, outcome: str | None, scenario: str) -> bool
     if scenario == "cancel" and verdict_u == "APPROVE":
         return True
     if scenario == "cancel" and outcome_u == "CANCELLED":
+        return True
+    if (
+        scenario == "cancel"
+        and (action or "").upper() == "CANCEL"
+        and verdict_u == "REJECT"
+        and "CANCEL_LATCHED" in {str(code).upper() for code in (reason_codes or [])}
+    ):
+        # Cancelling before a command exists is represented as a safe rejection:
+        # there is deliberately nothing to send to the machine.
         return True
     return False
 
@@ -434,7 +450,15 @@ def run_demo(args: argparse.Namespace) -> int:
         intent, safety, outcome = collect_loop(sub, timeout_s=args.result_timeout)
         verdict = str(((safety or {}).get("payload") or {}).get("verdict") or "") or None
         result_outcome = str(((outcome or {}).get("payload") or {}).get("outcome") or "") or None
-        passed = demo_passed(verdict, result_outcome, args.scenario)
+        intent_payload = (intent or {}).get("payload") or {}
+        safety_payload = (safety or {}).get("payload") or {}
+        passed = demo_passed(
+            verdict,
+            result_outcome,
+            args.scenario,
+            action=str(intent_payload.get("action") or "") or None,
+            reason_codes=[str(code) for code in safety_payload.get("reason_codes") or []],
+        )
         print_report(
             scenario=args.scenario,
             session_id=session_id,

@@ -509,7 +509,9 @@ class AudioHardwareRuntime:
         self._peak_since_start = 0.0
         self._capture_started_mono = time.monotonic()
         if self.asr is not None:
-            self._asr_warm = threading.Thread(target=self._warmup_asr, name="asr-warmup", daemon=True)
+            self._asr_warm = threading.Thread(
+                target=self._warmup_asr, name="asr-warmup", daemon=True
+            )
             self._asr_warm.start()
 
     def _warmup_asr(self) -> None:
@@ -652,7 +654,9 @@ class AudioHardwareRuntime:
     def _silence_watchdog(self) -> list[EventEnvelope]:
         if not self._capture_live or self._stream_failed:
             return []
-        elapsed = time.monotonic() - self._capture_started_mono if self._capture_started_mono else 0.0
+        elapsed = (
+            time.monotonic() - self._capture_started_mono if self._capture_started_mono else 0.0
+        )
         if elapsed < SILENCE_WATCHDOG_S:
             return []
         if self.ring.last_receive_ns is None:
@@ -672,7 +676,8 @@ class AudioHardwareRuntime:
             return [
                 self._device_status(
                     "degraded",
-                    "microphone is silent; grant Microphone permission to Terminal or Cursor in System Settings → Privacy & Security → Microphone",
+                    "microphone is silent; grant Microphone permission to Terminal or Cursor "
+                    "in System Settings → Privacy & Security → Microphone",
                 )
             ]
         if self._silence_warned:
@@ -704,9 +709,7 @@ class AudioHardwareRuntime:
                         asr_confidence=result.confidence,
                     )
                 else:
-                    events = [
-                        self._device_status("healthy", "heard speech; ASR returned no words")
-                    ]
+                    events = [self._device_status("healthy", "heard speech; ASR returned no words")]
             elif self.phrase:
                 if not self._phrase_emitted:
                     self._phrase_emitted = True

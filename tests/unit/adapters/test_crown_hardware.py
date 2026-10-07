@@ -164,9 +164,7 @@ def test_missing_credentials_stay_offline() -> None:
 def test_connect_timeout_keeps_heartbeats_and_reconnects() -> None:
     sink = ListSink()
     now_s = {"t": 0.0}
-    client = QueuedCrownClient(
-        login_error=CrownAuthError("Crown connect timed out after 20000ms")
-    )
+    client = QueuedCrownClient(login_error=CrownAuthError("Crown connect timed out after 20000ms"))
     run_crown_hardware(
         client=client,
         send=sink.send_event,
@@ -262,7 +260,7 @@ class _FakeDb:
         self.tree = tree
         self.path = ""
 
-    def child(self, name: str) -> "_FakeDb":
+    def child(self, name: str) -> _FakeDb:
         next_db = _FakeDb(self.tree)
         next_db.path = f"{self.path}/{name}".strip("/")
         return next_db

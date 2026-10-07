@@ -85,7 +85,9 @@ def test_color_aruco_detector_protocol_finds_catalog() -> None:
 
 
 def test_generated_aruco_markers_map_ids_0_to_3() -> None:
-    objects = detect_aruco_objects(aruco_four_markers_image(), [dict(row) for row in DEFAULT_CATALOG])
+    objects = detect_aruco_objects(
+        aruco_four_markers_image(), [dict(row) for row in DEFAULT_CATALOG]
+    )
     assert {item["object_id"] for item in objects} == EXPECTED_IDS
 
 

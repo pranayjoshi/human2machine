@@ -17,6 +17,12 @@ export function ConfirmationModal({ confirmation }: { confirmation: Confirmation
   if (!confirmation) return null;
   const remainingMs = Math.max(0, confirmation.expires_at_ms - now);
   const expired = remainingMs <= 0;
+  const readable = (value?: string | null) =>
+    (value || "Unknown")
+      .replace(/^object_/, "")
+      .replace(/_1$/, "")
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
   const act = async (kind: "confirm" | "cancel") => {
     setError(null);
@@ -39,25 +45,25 @@ export function ConfirmationModal({ confirmation }: { confirmation: Confirmation
           if (event.key === "Escape") void act("cancel");
         }}
       >
-        <p className="muted">Confirmation required</p>
-        <h2 id="confirm-title">Approve this action?</h2>
+        <p className="eyebrow">Confirmation</p>
+        <h2 id="confirm-title">Is this what you meant?</h2>
         <p className="big-action">
-          {confirmation.action ?? "UNKNOWN"} → {confirmation.target_object_id ?? "no target"}
+          {readable(confirmation.action)} · {readable(confirmation.target_object_id)}
         </p>
-        <p>{confirmation.why}</p>
+        <p>The signals were plausible but not clear enough to act without you.</p>
         <p className="expiry" aria-live="polite">
           {expired ? "Expired" : `Expires in ${(remainingMs / 1000).toFixed(1)} seconds`}
         </p>
         {error ? <p className="error">{error}</p> : null}
         <div className="btn-row">
           <button type="button" className="btn btn-primary" disabled={expired} onClick={() => void act("confirm")}>
-            Confirm
+            Yes, continue
           </button>
           <button type="button" className="btn" onClick={() => void act("cancel")}>
-            Cancel
+            No, cancel
           </button>
         </div>
-        <p className="muted">Keyboard: Escape cancels. EMG confirm remains available as a fallback.</p>
+        <p className="muted">Press Escape to cancel.</p>
       </div>
     </div>
   );

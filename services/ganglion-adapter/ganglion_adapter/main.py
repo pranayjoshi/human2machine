@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from intent_runtime.config import load_stacked_config
+from intent_runtime.logging import configure_logging
 
 from ganglion_adapter.acquisition import (
     TRANSPORT_BLE,
@@ -17,6 +18,18 @@ from ganglion_adapter.ble_scan import is_ganglion_advertisement, scan_ble_device
 from ganglion_adapter.events import heartbeat, make_event
 from ganglion_adapter.mock import GanglionMockRuntime
 from ganglion_adapter.publisher import BoundedAdapterPush, ListSink
+
+RETRYABLE_STARTUP_ERRORS = (
+    "BOARD_NOT_CREATED_ERROR",
+    "ANOTHER_BOARD_IS_CREATED_ERROR",
+    "SYNC_TIMEOUT_ERROR",
+    "EMPTY_BUFFER_ERROR",
+)
+
+
+def _retryable_startup_error(exc: Exception) -> bool:
+    message = str(exc).upper()
+    return any(token in message for token in RETRYABLE_STARTUP_ERRORS)
 
 
 def _models_dir(root: Path, ganglion: dict) -> Path:
@@ -57,12 +70,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional advertised BLE name if it is not Ganglion or Simblee",
     )
     parser.add_argument("--timeout", type=int, default=None, help="BLE scan timeout in seconds")
+    parser.add_argument(
+        "--startup-attempts",
+        type=int,
+        default=3,
+        help="Bounded hardware connection attempts before exiting for supervisor recovery",
+    )
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--endpoint", default=None)
     parser.add_argument("--duration-seconds", type=float, default=0.0)
     parser.add_argument("--disconnect-after-ms", type=float, default=0.0)
     parser.add_argument("--snr-db", type=float, default=12.0)
     parser.add_argument("--packet-loss", type=float, default=0.0)
+    parser.add_argument(
+        "--idle",
+        action="store_true",
+        help="Stream resting mock EMG; inject scenarios separately",
+    )
     return parser
 
 
@@ -73,6 +97,7 @@ def list_serial_candidates() -> list[str]:
 
 
 def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | None = None) -> int:
+    configure_logging("ganglion-adapter")
     args = build_parser().parse_args(argv)
     mock = not args.hardware
     config = load_stacked_config(find_repo_root() / "configs")
@@ -173,15 +198,25 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
             )
             started_wait = time.monotonic()
             seq = 0
+            attempts = 0
             while not stop:
                 try:
                     acquisition.start()
                     break
                 except Exception as exc:
+                    attempts += 1
+                    retrying = _retryable_startup_error(exc) and attempts < max(
+                        1, args.startup_attempts
+                    )
                     _emit_offline(
                         publisher,
-                        f"failed to start Ganglion: {exc}; retrying "
-                        "(quit OpenBCI GUI, keep the board advertising, grant Bluetooth)",
+                        f"failed to start Ganglion: {exc}"
+                        + (
+                            "; retrying (quit OpenBCI GUI, keep the board advertising, "
+                            "grant Bluetooth)"
+                            if retrying
+                            else "; startup attempts exhausted"
+                        ),
                     )
                     try:
                         acquisition.stop()
@@ -197,6 +232,8 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
                             "degraded",
                         )
                     )
+                    if not retrying:
+                        return 1
                     wait_end = time.monotonic() + max(1.0, float(connection.timeout_seconds))
                     while not stop and time.monotonic() < wait_end:
                         time.sleep(0.5)
@@ -222,6 +259,7 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
             shadow_only=bool(ganglion.get("shadow_only", True)),
             acquisition=acquisition,
             models_dir=_models_dir(find_repo_root(), ganglion),
+            rest_only=bool(mock and args.idle),
         )
         started = time.monotonic()
         last_heartbeat = 0.0

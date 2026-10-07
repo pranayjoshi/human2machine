@@ -5,6 +5,7 @@ import signal
 import time
 
 from intent_runtime.config import load_stacked_config
+from intent_runtime.logging import configure_logging
 
 from audio_adapter.capture import AudioHardwareRuntime, list_sound_devices
 from audio_adapter.mock import AudioMockRuntime, find_repo_root
@@ -17,6 +18,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hardware", action="store_true")
     parser.add_argument("--endpoint", default=None)
     parser.add_argument("--duration-seconds", type=float, default=0.0)
+    parser.add_argument(
+        "--idle",
+        action="store_true",
+        help="Publish mock health without scripted utterances; inject scenarios separately",
+    )
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument(
         "--self-test",
@@ -38,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | None = None) -> int:
+    configure_logging("audio-adapter")
     args = build_parser().parse_args(argv)
     mock = not args.hardware
     config = load_stacked_config(find_repo_root() / "configs")
@@ -78,7 +85,10 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
     hardware: AudioHardwareRuntime | None = None
     try:
         if mock:
-            runtime = AudioMockRuntime(model_id=str(audio_cfg.get("parser", "grammar_v1")))
+            runtime = AudioMockRuntime(
+                utterances=[] if args.idle else None,
+                model_id=str(audio_cfg.get("parser", "grammar_v1")),
+            )
         else:
             device_name = devices_cfg.get("device_name")
             sample_rate = int(

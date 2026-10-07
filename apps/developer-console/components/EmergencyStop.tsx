@@ -18,7 +18,7 @@ export function EmergencyStop({ latched }: { latched: boolean }) {
         onClick={() => run(() => api.estop())}
         disabled={busy}
       >
-        Emergency stop
+        Stop
       </button>
       {latched ? (
         <button
@@ -27,7 +27,7 @@ export function EmergencyStop({ latched }: { latched: boolean }) {
           style={{ marginLeft: "0.5rem" }}
           onClick={() => setResetOpen(true)}
         >
-          Reset stop latch…
+          Reset…
         </button>
       ) : null}
       {message ? <p className="error">{message}</p> : null}
@@ -39,11 +39,9 @@ export function EmergencyStop({ latched }: { latched: boolean }) {
             aria-modal="true"
             aria-labelledby="reset-title"
           >
-            <h2 id="reset-title">Reset emergency stop?</h2>
-            <p>
-              This does not happen if the browser disconnects. Confirm only if the workspace is
-              safe and you intend to clear the latch.
-            </p>
+            <p className="eyebrow">Safety latch</p>
+            <h2 id="reset-title">Clear the stop?</h2>
+            <p>Only continue after you have checked that the workspace is safe.</p>
             <div className="btn-row">
               <button
                 type="button"
@@ -55,10 +53,10 @@ export function EmergencyStop({ latched }: { latched: boolean }) {
                   })
                 }
               >
-                Yes, reset emergency stop
+                Clear stop
               </button>
               <button type="button" className="btn" onClick={() => setResetOpen(false)}>
-                Keep latched
+                Keep stopped
               </button>
             </div>
           </div>

@@ -652,5 +652,7 @@ def test_milestone1_emg_shadow_does_not_control() -> None:
         assert left_d[-1]["confidence"] == right_d[-1]["confidence"]
         assert "evt_emg_01" not in {item["event_id"] for item in right_d[-1]["evidence"]}
     assert not any(
-        event.payload.get("action") == "CANCEL" for event in right.events if event.event_type == EventType.INTENT_DECISION
+        event.payload.get("action") == "CANCEL"
+        for event in right.events
+        if event.event_type == EventType.INTENT_DECISION
     )

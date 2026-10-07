@@ -11,8 +11,8 @@ from pathlib import Path
 import numpy as np
 
 from audio_adapter.capture import (
-    AudioHardwareRuntime,
     ENERGY_THRESHOLD,
+    AudioHardwareRuntime,
     describe_asr,
     list_sound_devices,
     resolve_asr,

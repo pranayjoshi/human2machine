@@ -7,7 +7,6 @@ from intent_contracts.control import (
     SessionStartRequest,
     TrialStartRequest,
 )
-from intent_contracts.envelope import EventEnvelope, new_event_id, now_monotonic_ns, now_wall_ns
 from intent_contracts.enums import (
     Action,
     EventType,
@@ -17,6 +16,7 @@ from intent_contracts.enums import (
     SessionState,
     TargetReference,
 )
+from intent_contracts.envelope import EventEnvelope, new_event_id, now_monotonic_ns, now_wall_ns
 from intent_contracts.events import (
     ActionOutcomePayload,
     AudioIntentPayload,

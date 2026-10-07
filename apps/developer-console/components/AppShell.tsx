@@ -15,8 +15,9 @@ const LINKS = [
   { href: "/session", label: "Live", mark: "02" },
   { href: "/inspect", label: "Decision", mark: "03" },
   { href: "/review", label: "Sessions", mark: "04" },
-  { href: "/calibrate", label: "Calibrate", mark: "05" },
-  { href: "/setup", label: "Devices", mark: "06" },
+  { href: "/testing", label: "Testing", mark: "05" },
+  { href: "/calibrate", label: "Calibrate", mark: "06" },
+  { href: "/setup", label: "Devices", mark: "07" },
 ];
 
 function formatTimer(startedAt?: number | null): string {

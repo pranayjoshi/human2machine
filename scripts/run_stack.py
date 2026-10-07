@@ -33,8 +33,15 @@ def stack_commands(python: str, *, mock: bool) -> list[list[str]]:
         [python, "-m", "robot_simulator.main", *mock_only],
         [python, "-m", "session_recorder.main", *optional_mock],
         [python, "-m", "console_api.main", *optional_mock],
-        [python, "-m", "ganglion_adapter.main", *adapter_flag],
-        [python, "-m", "audio_adapter.main", *adapter_flag],
+        [
+            python,
+            "-m",
+            "ganglion_adapter.main",
+            *adapter_flag,
+            *(["--startup-attempts", "3"] if not mock else []),
+            *(["--idle"] if mock else []),
+        ],
+        [python, "-m", "audio_adapter.main", *adapter_flag, *(["--idle"] if mock else [])],
         [python, "-m", "vision_adapter.main", *adapter_flag],
         [python, "-m", "crown_adapter.main", *adapter_flag],
         ["pnpm", "--filter", "@intent/developer-console", "dev"],
@@ -49,7 +56,22 @@ def is_optional_stack_child(command: list[str] | tuple[str, ...], *, mock: bool)
     return "crown_adapter.main" in blob or "ganglion_adapter.main" in blob
 
 
-def spawn(command: list[str], extra_env: dict[str, str] | None = None) -> subprocess.Popen:
+def _process_name(command: list[str]) -> str:
+    if "-m" in command:
+        index = command.index("-m")
+        if index + 1 < len(command):
+            return command[index + 1].removesuffix(".main").replace("_", "-")
+    if "@intent/developer-console" in command:
+        return "developer-console"
+    return Path(command[0]).stem
+
+
+def spawn(
+    command: list[str],
+    extra_env: dict[str, str] | None = None,
+    *,
+    log_dir: Path | None = None,
+) -> subprocess.Popen:
     env = os.environ.copy()
     pythonpath = [
         str(ROOT / "packages/contracts-python/src"),
@@ -66,9 +88,23 @@ def spawn(command: list[str], extra_env: dict[str, str] | None = None) -> subpro
         str(ROOT / "services/vision-adapter"),
     ]
     env["PYTHONPATH"] = os.pathsep.join(pythonpath)
+    env.setdefault("H2M_LOG_FORMAT", "json")
     if extra_env:
         env.update(extra_env)
-    return subprocess.Popen(command, cwd=ROOT, env=env)
+    target_dir = log_dir or ROOT / "data" / "runtime" / "logs"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    log_path = target_dir / f"{_process_name(command)}.log"
+    output = log_path.open("w", encoding="utf-8")
+    try:
+        return subprocess.Popen(
+            command,
+            cwd=ROOT,
+            env=env,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+        )
+    finally:
+        output.close()
 
 
 def shutdown(children: list[subprocess.Popen], *, linger_s: float = 0.5) -> None:
@@ -104,8 +140,12 @@ def main() -> int:
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
-    children.extend(spawn(command) for command in stack_commands(sys.executable, mock=args.mock))
-    print("stack launched; Ctrl+C to stop")
+    log_dir = ROOT / "data" / "runtime" / "logs"
+    children.extend(
+        spawn(command, log_dir=log_dir)
+        for command in stack_commands(sys.executable, mock=args.mock)
+    )
+    print(f"stack ready · logs: {log_dir} · Ctrl+C to stop")
     ignored: set[int] = set()
     try:
         while True:

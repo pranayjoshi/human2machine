@@ -92,6 +92,14 @@ def test_demo_pass_criteria() -> None:
     assert not demo_passed("APPROVE", None, "success")
     assert demo_passed("APPROVE", None, "cancel")
     assert demo_passed("APPROVE", "CANCELLED", "cancel")
+    assert demo_passed(
+        "REJECT",
+        None,
+        "cancel",
+        action="CANCEL",
+        reason_codes=["CANCEL_LATCHED"],
+    )
+    assert not demo_passed("REJECT", None, "cancel", action="CANCEL", reason_codes=[])
     assert demo_passed("ASK_CONFIRMATION", None, "conflict")
 
 
@@ -102,7 +110,8 @@ def _joined(mock: bool) -> list[str]:
 def test_mock_stack_passes_mock_to_every_service() -> None:
     rows = _joined(True)
     assert any("fusion_runtime.main --mock" in row for row in rows)
-    assert any("ganglion_adapter.main --mock" in row for row in rows)
+    assert any("ganglion_adapter.main --mock --idle" in row for row in rows)
+    assert any("audio_adapter.main --mock --idle" in row for row in rows)
     assert any("crown_adapter.main --mock" in row for row in rows)
 
 
@@ -111,7 +120,12 @@ def test_hardware_stack_keeps_simulator_loop_on_mock() -> None:
     for service in ("fusion_runtime.main", "safety_gateway.main", "robot_simulator.main"):
         assert any(f"{service} --mock" in row for row in rows)
         assert not any(f"{service} --hardware" in row for row in rows)
-    for service in ("ganglion_adapter.main", "audio_adapter.main", "vision_adapter.main", "crown_adapter.main"):
+    for service in (
+        "ganglion_adapter.main",
+        "audio_adapter.main",
+        "vision_adapter.main",
+        "crown_adapter.main",
+    ):
         assert any(f"{service} --hardware" in row for row in rows)
 
 

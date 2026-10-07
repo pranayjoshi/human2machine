@@ -300,17 +300,12 @@ export async function loginWhileHeartbeating(opts: {
   timeoutMs: number;
   onTimeout?: () => Promise<void>;
 }): Promise<void> {
-  let settled: Settle | null = null;
-  opts.login().then(
-    () => {
-      settled = { status: "ok" };
-    },
-    (error) => {
-      settled = { status: "err", error };
-    },
+  const loginResult: Promise<Settle> = opts.login().then(
+    () => ({ status: "ok" }),
+    (error: unknown) => ({ status: "err", error }),
   );
   const deadline = opts.now() + Math.max(1, opts.timeoutMs);
-  while (settled === null) {
+  while (true) {
     if (opts.halt()) {
       throw new Error("halted during Neurosity login");
     }
@@ -319,13 +314,16 @@ export async function loginWhileHeartbeating(opts: {
       throw new Error(`Neurosity login timed out after ${opts.timeoutMs}ms`);
     }
     await opts.maybeHeartbeat("degraded");
-    await opts.sleep(200);
-  }
-  if (settled === null) {
-    throw new Error("Neurosity login did not settle");
-  }
-  if (settled.status === "err") {
-    throw settled.error;
+    const settled = await Promise.race([
+      loginResult,
+      opts.sleep(200).then(() => null),
+    ]);
+    if (settled !== null) {
+      if (settled.status === "err") {
+        throw settled.error;
+      }
+      return;
+    }
   }
 }
 

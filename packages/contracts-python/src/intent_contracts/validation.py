@@ -4,8 +4,8 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from intent_contracts.envelope import EventEnvelope
 from intent_contracts.enums import EventType
+from intent_contracts.envelope import EventEnvelope
 from intent_contracts.events import (
     ActionOutcomePayload,
     AudioIntentPayload,
