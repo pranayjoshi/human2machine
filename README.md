@@ -23,12 +23,25 @@ See `docs/multimodal-intent-compiler/` for the implementation handbook. Runtime 
 ## Quick start
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,vision,audio-mlx]"
 pnpm install
+just fetch-models   # MediaPipe, YOLOE-26, Parakeet — downloads and warms each once
 just run-mocks
 ```
 
 Then open the developer console at `http://127.0.0.1:3000`. The API gateway is `http://127.0.0.1:8000`.
+
+The console has four areas: **Operate** (start a session, watch Heard → Seen → Gesture → Decision → Safety → Machine, confirm requests), **Setup** (devices, calibration, preflight), **Robot** (live machine state) and **Sessions** (history).
+
+## Perception models
+
+| Signal | Model | Notes |
+|---|---|---|
+| Speech | NVIDIA Parakeet TDT 0.6B v3 via `parakeet-mlx` | ~80 ms per utterance on M1 Pro; falls back to Whisper (`audio.asr_backend`) |
+| Objects | Ultralytics YOLOE-26s (open vocabulary) | Describe real objects with `prompt:` in `configs/modalities.yaml`; ~28 ms/frame on MPS. `detector: hsv` keeps color blocks |
+| Pointing, head direction | MediaPipe Tasks Hand/Face Landmarker | MediaPipe 1.x removed `mp.solutions`; `.task` files live in `models/vision/` |
+
+Spoken object names come from the same `objects` list, so "hand me the mug" resolves when a `red mug` is configured.
 
 `just run-mocks` starts the complete stack without hardware. Then either click **Demo: success** on the live session page or run `just demo`. `just run-hardware` requires explicit confirmation and is documented in the device handbook.
 

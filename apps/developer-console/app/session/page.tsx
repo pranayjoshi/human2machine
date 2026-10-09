@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 
 import { Sparkline } from "@/components/Sparkline";
 import { StatusPill } from "@/components/Status";
 import { API_BASE, api } from "@/lib/api";
+import { VERDICT_COPY, ago, clock, objectName, percent, signalTone, words, type Tone } from "@/lib/format";
 import { useBusyAction, useLive } from "@/lib/live";
 import type {
   BiosignalHealth,
@@ -12,83 +14,221 @@ import type {
   LiveState,
   ModalityFeature,
   PlotSnapshot,
+  PreflightResult,
+  ServiceView,
   VisionState,
 } from "@/lib/types";
 
-function words(value: string | null | undefined): string {
-  if (!value) return "Waiting";
-  return value
-    .replace(/^object_/, "")
-    .replace(/_1$/, "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+function service(snapshot: LiveState | null, key: string): ServiceView | undefined {
+  return snapshot?.services.find((item) => item.id.includes(key));
 }
 
-function percent(value: number | null | undefined): string {
-  return value == null ? "—" : `${Math.round(value * 100)}%`;
+function serviceTone(item?: ServiceView): Tone {
+  return (item?.status as Tone | undefined) ?? "offline";
 }
 
-function age(value: number | null | undefined): string {
-  if (value == null) return "No data";
-  if (value < 1000) return `${Math.round(value)} ms ago`;
-  return `${(value / 1000).toFixed(1)} s ago`;
-}
+/* ───────────────────────── Session bar ───────────────────────── */
 
-function signalStatus(health?: BiosignalHealth): "healthy" | "degraded" | "offline" {
-  if (!health || health.last_data_age_ms == null || health.last_data_age_ms > 5000) {
-    return "offline";
+function SessionBar({ snapshot }: { snapshot: LiveState | null }) {
+  const { busy, message, run } = useBusyAction();
+  const [preflight, setPreflight] = useState<PreflightResult | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [instruction, setInstruction] = useState("");
+  const session = snapshot?.session ?? null;
+
+  const check = useCallback(() => run(async () => setPreflight(await api.preflight())), [run]);
+  useEffect(() => {
+    if (!session) void check();
+  }, [session, check]);
+
+  if (!session) {
+    const required = preflight?.checks.filter((item) => item.required) ?? [];
+    const blocking = required.filter((item) => item.status !== "healthy");
+    return (
+      <section className="session-bar" aria-label="Session">
+        <div className="session-bar-main">
+          <div>
+            <h1>No session running</h1>
+            <p className="muted">
+              {preflight == null
+                ? "Checking devices…"
+                : blocking.length
+                  ? `${required.length - blocking.length} of ${required.length} required services ready.`
+                  : "All required services are ready."}
+            </p>
+          </div>
+          <div className="session-actions">
+            <label className="consent">
+              <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
+              Participant consented to recording
+            </label>
+            <button type="button" className="btn" disabled={busy} onClick={() => void check()}>
+              Re-check
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy || !consent}
+              title={consent ? undefined : "Confirm consent first"}
+              onClick={() =>
+                run(async () => {
+                  const result = await api.startSession({ consent: true });
+                  if (!result.ok) throw new Error(result.error ?? "Session did not start");
+                })
+              }
+            >
+              Start session
+            </button>
+          </div>
+        </div>
+        {blocking.length ? (
+          <ul className="blockers">
+            {blocking.map((item) => (
+              <li key={item.id}>
+                <StatusPill status={item.status} label={item.name} />
+                <span>{item.recovery ?? item.message}</span>
+              </li>
+            ))}
+            <li>
+              <Link className="text-link" href="/setup">Open setup →</Link>
+            </li>
+          </ul>
+        ) : null}
+        {message ? <p className="error">{message}</p> : null}
+      </section>
+    );
   }
-  if (
-    (health.quality ?? 0) < 0.4 ||
-    health.packet_loss_count > 0 ||
-    health.sequence_gaps > 0
-  ) {
-    return "degraded";
-  }
-  return "healthy";
-}
 
-function confidence(feature?: ModalityFeature | null): number {
-  return Math.max(0, Math.min(1, feature?.confidence ?? 0));
-}
-
-function SensorCard({
-  title,
-  value,
-  detail,
-  status,
-  score,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  status: string;
-  score?: number | null;
-}) {
+  const trials = session.trials ?? [];
+  const activeTrial = snapshot?.active_trial_id ?? null;
   return (
-    <article className="sensor-card">
-      <header>
-        <h3>{title}</h3>
-        <StatusPill status={status} label={status === "healthy" ? "Live" : status} />
-      </header>
-      <p className="sensor-value">{value}</p>
-      <p className="sensor-detail">{detail}</p>
-      <div className="confidence-track" aria-label={score == null ? "No confidence" : `${percent(score)} confidence`}>
-        <span style={{ width: `${Math.round((score ?? 0) * 100)}%` }} />
+    <section className="session-bar" aria-label="Session">
+      <div className="session-bar-main">
+        <div>
+          <h1>
+            Session <span className="mono">{session.session_id.replace(/^session_/, "").slice(0, 8)}</span>
+          </h1>
+          <p className="muted">
+            {trials.length} trial{trials.length === 1 ? "" : "s"}
+            {activeTrial ? " · trial in progress" : " · speak, point, or gesture to make a request"}
+          </p>
+        </div>
+        <form
+          className="session-actions"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void run(async () => {
+              await api.startTrial(session.session_id, { instruction: instruction.trim() || "Live interaction" });
+              setInstruction("");
+            });
+          }}
+        >
+          <input
+            className="input"
+            placeholder="Trial instruction (optional)"
+            value={instruction}
+            onChange={(event) => setInstruction(event.target.value)}
+            aria-label="Trial instruction"
+          />
+          <button type="submit" className="btn btn-primary" disabled={busy}>
+            New trial
+          </button>
+          <button type="button" className="btn" disabled={busy} onClick={() => run(() => api.stopSession(session.session_id))}>
+            End session
+          </button>
+        </form>
       </div>
-    </article>
+      {message ? <p className="error">{message}</p> : null}
+    </section>
   );
 }
 
-function CameraView({
-  vision,
-  preview,
-}: {
-  vision: VisionState | null;
-  preview: { available: boolean; width: number; height: number } | null | undefined;
-}) {
+/* ───────────────────────── Pipeline ───────────────────────── */
+
+type Step = { label: string; value: string; detail: string; tone: Tone; active: boolean };
+
+function pipeline(snapshot: LiveState | null): Step[] {
+  const audio = snapshot?.audio;
+  const vision = snapshot?.vision;
+  const emg = snapshot?.features?.emg;
+  const intent = snapshot?.intent;
+  const safety = snapshot?.safety;
+  const machine = snapshot?.machine;
+  const pointed = vision?.pointing_candidates?.[0];
+  const verdict = safety?.verdict ? VERDICT_COPY[safety.verdict] : undefined;
+  const name = (id?: string | null) => objectName(id, vision?.objects);
+  const busyMachine = machine?.state && machine.state !== "READY";
+
+  return [
+    {
+      label: "Heard",
+      value: audio?.transcript?.trim() ? `“${audio.transcript.trim()}”` : "Listening…",
+      detail: audio?.action
+        ? `${words(audio.action)}${audio.target_object_id ? ` · ${name(audio.target_object_id)}` : ""}`
+        : "No request yet",
+      tone: serviceTone(service(snapshot, "audio")),
+      active: Boolean(audio?.transcript?.trim()),
+    },
+    {
+      label: "Seen",
+      value: pointed ? name(pointed.object_id) : `${vision?.objects?.length ?? 0} objects`,
+      detail: pointed ? `Pointing · ${percent(pointed.confidence)}` : "No pointing target",
+      tone: serviceTone(service(snapshot, "vision")),
+      active: Boolean(pointed),
+    },
+    {
+      label: "Gesture",
+      value: words(emg?.label, "—"),
+      detail: emg ? (emg.shadow_only ? "Monitoring only" : `${percent(emg.confidence)} · drives confirm/cancel`) : "No EMG model",
+      tone: signalTone(snapshot?.biosignals?.emg),
+      active: Boolean(emg && emg.label !== "rest" && !emg.shadow_only),
+    },
+    {
+      label: "Decision",
+      value: intent ? `${words(intent.action)}${intent.target_object_id ? ` · ${name(intent.target_object_id)}` : ""}` : "—",
+      detail: intent ? `${percent(intent.confidence)} confidence` : "Waiting for evidence",
+      tone: serviceTone(service(snapshot, "fusion")),
+      active: Boolean(intent),
+    },
+    {
+      label: "Safety",
+      value: verdict?.label ?? "—",
+      detail: verdict?.detail ?? "Nothing to check",
+      tone: verdict?.tone ?? serviceTone(service(snapshot, "safety")),
+      active: Boolean(verdict),
+    },
+    {
+      label: "Machine",
+      value: words(machine?.state, "No state yet"),
+      detail: machine?.stage ? words(machine.stage) : machine?.fault_reason ?? "Idle",
+      tone: machine?.state === "FAULT" || machine?.state === "ESTOPPED" ? "offline" : serviceTone(service(snapshot, "simulator")),
+      active: Boolean(busyMachine),
+    },
+  ];
+}
+
+function Pipeline({ snapshot }: { snapshot: LiveState | null }) {
+  return (
+    <ol className="pipeline" aria-label="Signal to action pipeline">
+      {pipeline(snapshot).map((step) => (
+        <li key={step.label} className={`pipe-step tone-${step.tone}${step.active ? " active" : ""}`}>
+          <span className="pipe-label">
+            <i aria-hidden="true" />
+            {step.label}
+          </span>
+          <strong title={step.value}>{step.value}</strong>
+          <small>{step.detail}</small>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/* ───────────────────────── Camera ───────────────────────── */
+
+function CameraView({ vision, preview }: { vision: VisionState | null; preview: LiveState["vision_preview"] }) {
   const objects = vision?.objects ?? [];
-  const pointed = new Set((vision?.pointing_candidates ?? []).map((item) => item.object_id));
+  const pointed = vision?.pointing_candidates?.[0]?.object_id;
   const width = preview?.width || 1280;
   const height = preview?.height || 720;
   const live = Boolean(preview?.available);
@@ -101,335 +241,259 @@ function CameraView({
   }, [live]);
 
   return (
-    <section className="panel" aria-labelledby="camera-heading">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Workspace</p>
-          <h2 id="camera-heading">What the camera sees</h2>
-        </div>
-        <StatusPill status={live ? "healthy" : "degraded"} label={live ? "Live" : "Overlay only"} />
+    <section className="card camera-card" aria-labelledby="camera-heading">
+      <header className="card-head">
+        <h2 id="camera-heading">Workspace camera</h2>
+        <span className="muted">
+          {objects.length} object{objects.length === 1 ? "" : "s"}
+          {live ? "" : " · no video feed"}
+        </span>
+      </header>
+      <div className="camera-stage">
+        {live ? <img src={`${API_BASE}/api/vision/preview?t=${tick}`} alt="Live tabletop camera" width={width} height={height} /> : null}
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Detected objects">
+          {!live ? <rect width={width} height={height} fill="#17191f" /> : null}
+          {objects.map((object) => {
+            const [x1, y1, x2, y2] = object.bbox_xyxy;
+            const selected = object.object_id === pointed;
+            return (
+              <g key={object.object_id}>
+                <rect
+                  x={x1}
+                  y={y1}
+                  width={x2 - x1}
+                  height={y2 - y1}
+                  fill={selected ? "rgba(242,197,109,.18)" : "none"}
+                  stroke={selected ? "#f2c56d" : "#ffffff"}
+                  strokeWidth={selected ? 5 : 2}
+                />
+                <text x={x1 + 8} y={y1 + 24} fill="#ffffff" fontSize="18">
+                  {words(object.class_name)} {percent(object.confidence)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+        {!live && !objects.length ? <p className="camera-empty">Camera offline</p> : null}
       </div>
-      <div className="camera">
-        <div className="camera-stage">
-          {live ? (
-            <img
-              src={`${API_BASE}/api/vision/preview?t=${tick}`}
-              alt="Live tabletop camera"
-              width={width}
-              height={height}
-            />
-          ) : null}
-          <svg viewBox={`0 0 ${width} ${height}`} aria-label="Detected object overlay" role="img">
-            {!live ? <rect width={width} height={height} fill="#17191f" /> : null}
-            {objects.map((object) => {
-              const [x1, y1, x2, y2] = object.bbox_xyxy;
-              const selected = pointed.has(object.object_id);
-              return (
-                <g key={object.object_id}>
-                  <rect
-                    x={x1}
-                    y={y1}
-                    width={x2 - x1}
-                    height={y2 - y1}
-                    fill="none"
-                    stroke={selected ? "#f2c56d" : "#ffffff"}
-                    strokeWidth={selected ? 5 : 2}
-                  />
-                  <text x={x1 + 7} y={y1 + 23} fill="#ffffff" fontSize="17">
-                    {words(object.class_name)}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-      </div>
-      <p className="camera-caption">
-        {objects.length
-          ? `${objects.length} object${objects.length === 1 ? "" : "s"} visible`
-          : "No objects visible"}
-        {vision?.pointing_candidates?.[0]
-          ? ` · pointing toward ${words(vision.pointing_candidates[0].object_id)}`
-          : ""}
-      </p>
     </section>
   );
 }
 
-function DecisionCard({ snapshot }: { snapshot: LiveState | null }) {
+/* ───────────────────────── Decision ───────────────────────── */
+
+function DecisionPanel({ snapshot }: { snapshot: LiveState | null }) {
   const intent = snapshot?.intent;
   const safety = snapshot?.safety;
-  const machine = snapshot?.machine;
-  const verdict = safety?.verdict;
-  let title = "Waiting for a clear request";
-  let explanation = "Speak naturally, point to an object, or use your calibrated gesture.";
-
-  if (intent) {
-    const action = words(intent.action);
-    const target = intent.target_object_id ? words(intent.target_object_id) : null;
-    title = target ? `${action} · ${target}` : action;
-    if (verdict === "APPROVE") explanation = "The evidence was clear and the safety checks passed.";
-    else if (verdict === "ASK_CONFIRMATION") explanation = "The request is plausible, but needs your confirmation.";
-    else if (verdict === "HOLD") explanation = "The system is waiting because the available evidence is not strong enough.";
-    else if (verdict === "REJECT") explanation = "The request was blocked by the safety policy.";
-    else explanation = "Evidence is still being combined before a safe decision is made.";
-  }
+  const verdict = safety?.verdict ? VERDICT_COPY[safety.verdict] : undefined;
+  const name = (id?: string | null) => objectName(id, snapshot?.vision?.objects);
+  const failed = Object.entries(safety?.checks ?? {}).filter(([, passed]) => passed === false);
+  const passed = Object.entries(safety?.checks ?? {}).filter(([, ok]) => ok);
 
   return (
-    <section className="decision-hero" aria-live="polite">
-      <p className="eyebrow">Current interpretation</p>
-      <h2>{title}</h2>
-      <p className="muted">{explanation}</p>
-      <div className="decision-meta">
-        <span>
-          Confidence
-          <strong>{percent(intent?.confidence)}</strong>
-        </span>
-        <span>
-          Safety
-          <strong>{words(verdict)}</strong>
-        </span>
-        <span>
-          Machine
-          <strong>{words(machine?.state)}</strong>
-        </span>
-      </div>
+    <section className="card" aria-live="polite" aria-labelledby="decision-heading">
+      <header className="card-head">
+        <h2 id="decision-heading">Why</h2>
+        {verdict ? <StatusPill status={verdict.tone} label={verdict.label} /> : null}
+      </header>
+      {!intent ? (
+        <p className="muted empty">
+          No decision yet. Say something like “hand me the red block”, point at an object, or both.
+        </p>
+      ) : (
+        <>
+          <p className="decision-line">
+            {words(intent.action)}
+            {intent.target_object_id ? ` · ${name(intent.target_object_id)}` : ""}
+            <span>{percent(intent.confidence)}</span>
+          </p>
+          <p className="muted">{verdict?.detail ?? "Evaluating…"}</p>
+
+          <h3 className="sub">Evidence</h3>
+          <div className="evidence">
+            {(intent.evidence ?? []).length ? (
+              (intent.evidence ?? []).map((item) => (
+                <div className="evidence-row" key={item.event_id}>
+                  <strong>{words(item.modality)}</strong>
+                  <div className="evidence-bar">
+                    <span style={{ width: `${Math.round(Math.max(0, Math.min(1, item.contribution)) * 100)}%` }} />
+                  </div>
+                  <small>{percent(item.contribution)}</small>
+                </div>
+              ))
+            ) : (
+              <p className="muted">No evidence attached.</p>
+            )}
+          </div>
+
+          {failed.length ? (
+            <>
+              <h3 className="sub">Blocking checks</h3>
+              <ul className="check-list">
+                {failed.map(([key]) => (
+                  <li key={key}>
+                    <StatusPill status="offline" label={words(key)} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {intent.conflicts?.length ? (
+            <p className="callout">Conflict: {intent.conflicts.map((item) => words(item)).join(", ")}</p>
+          ) : null}
+
+          <details className="more">
+            <summary>Technical detail</summary>
+            <dl className="kv">
+              <div><dt>Decision</dt><dd className="mono">{intent.decision_id}</dd></div>
+              <div><dt>Fusion model</dt><dd>{intent.fusion_model_id ?? "—"}</dd></div>
+              <div><dt>Policy</dt><dd>{safety?.policy_version ?? "—"}</dd></div>
+              <div><dt>Passed checks</dt><dd>{passed.map(([key]) => words(key)).join(", ") || "—"}</dd></div>
+              <div><dt>Reason codes</dt><dd>{safety?.reason_codes?.map((code) => words(code)).join(", ") || "—"}</dd></div>
+              <div>
+                <dt>Alternatives</dt>
+                <dd>
+                  {(intent.alternatives ?? [])
+                    .map((alt) => `${words(alt.action)}${alt.target_object_id ? ` · ${name(alt.target_object_id)}` : ""} ${percent(alt.confidence)}`)
+                    .join(", ") || "—"}
+                </dd>
+              </div>
+            </dl>
+          </details>
+        </>
+      )}
     </section>
   );
 }
 
-function SignalDetail({
+function Activity({ snapshot }: { snapshot: LiveState | null }) {
+  const items = (snapshot?.timeline ?? []).slice(0, 8);
+  return (
+    <section className="card" aria-labelledby="activity-heading">
+      <header className="card-head">
+        <h2 id="activity-heading">Activity</h2>
+      </header>
+      {items.length ? (
+        <ol className="activity">
+          {items.map((item, index) => (
+            <li key={`${item.t_ms}-${index}`}>
+              <time>{clock(item.t_ms)}</time>
+              <span className={`kind kind-${item.kind}`}>{words(item.kind)}</span>
+              <strong>{words(item.label)}</strong>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="muted empty">Nothing yet.</p>
+      )}
+    </section>
+  );
+}
+
+/* ───────────────────────── Diagnostics ───────────────────────── */
+
+function SignalBlock({
   title,
-  note,
   health,
   feature,
   plot,
 }: {
   title: string;
-  note: string;
   health?: BiosignalHealth;
   feature?: ModalityFeature | null;
   plot: PlotSnapshot;
 }) {
-  const status = signalStatus(health);
   return (
-    <article>
-      <header className="section-heading">
-        <div>
-          <h3>{title}</h3>
-          <p className="muted">{note}</p>
-        </div>
-        <StatusPill status={status} />
+    <article className="signal-block">
+      <header className="card-head">
+        <h3>{title}</h3>
+        <StatusPill status={signalTone(health)} />
       </header>
-      <dl className="kv">
-        <div>
-          <dt>Interpretation</dt>
-          <dd>{words(feature?.label)}</dd>
-        </div>
-        <div>
-          <dt>Confidence</dt>
-          <dd>{percent(feature?.confidence)}</dd>
-        </div>
-        <div>
-          <dt>Signal quality</dt>
-          <dd>{percent(health?.quality)}</dd>
-        </div>
-        <div>
-          <dt>Last sample</dt>
-          <dd>{age(health?.last_data_age_ms)}</dd>
-        </div>
-      </dl>
+      <p className="muted">
+        {words(feature?.label, "No reading")} · quality {percent(health?.quality)} · {ago(health?.last_data_age_ms)}
+      </p>
       <Sparkline plot={plot} label={`${title} channels`} />
-      {health?.flags?.length ? <p className="muted">Check: {health.flags.map(words).join(", ")}</p> : null}
+      {health?.flags?.length ? <p className="muted">Flags: {health.flags.map((flag) => words(flag)).join(", ")}</p> : null}
     </article>
   );
 }
 
-function formatTimeline(kind: string, label: string): { title: string; detail: string } {
-  const readable = words(label);
-  if (kind === "safety") return { title: `Safety · ${readable}`, detail: "Policy evaluated the request" };
-  if (kind === "machine") return { title: `Machine · ${readable}`, detail: "Machine state changed" };
-  if (kind === "outcome") return { title: `Outcome · ${readable}`, detail: "Action finished" };
-  if (kind === "control") return { title: readable, detail: "Operator control" };
-  return { title: readable, detail: words(kind) };
-}
-
-export default function SessionPage() {
-  const { snapshot, plots, connected } = useLive();
-  const { busy, message, run } = useBusyAction();
-  const session = snapshot?.session ?? null;
-  const emg = snapshot?.features?.emg;
-  const eeg = snapshot?.features?.eeg;
-  const pointed = snapshot?.vision?.pointing_candidates?.[0];
-  const [demoNote, setDemoNote] = useState<string | null>(null);
-
-  const runDemo = (scenario: DemoScenario) => {
-    setDemoNote(null);
-    void run(async () => {
-      const result = await api.runDemo(scenario);
-      setDemoNote(`${words(scenario)} test sent · ${result.events_injected} events`);
-    });
-  };
-
+function Diagnostics({ snapshot, plots }: { snapshot: LiveState | null; plots: { eeg: PlotSnapshot; emg: PlotSnapshot } }) {
+  const services = snapshot?.services ?? [];
+  const unhealthy = services.filter((item) => item.status !== "healthy");
   return (
-    <>
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Live workspace</p>
-          <h1>Human signals, made useful.</h1>
-          <p className="lede">One view of what you said, indicated, and confirmed—and what the system decided to do.</p>
-        </div>
-        <div className="btn-row">
-          {session ? (
-            <>
-              <button
-                type="button"
-                className="btn"
-                disabled={busy}
-                onClick={() => run(() => api.startTrial(session.session_id, { instruction: "Live interaction" }))}
-              >
-                New interaction
-              </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={busy}
-                onClick={() => run(() => api.stopSession(session.session_id))}
-              >
-                End session
-              </button>
-            </>
-          ) : null}
-        </div>
-      </header>
-
-      {!connected ? <p className="error" role="status">The live view is offline. Displayed values may be stale.</p> : null}
-      {message ? <p className="error">{message}</p> : null}
-
-      <section className="sensor-grid" aria-label="Live signal interpretations">
-        <SensorCard
-          title="Voice"
-          value={snapshot?.audio?.transcript?.trim() || "Listening"}
-          detail={
-            snapshot?.audio?.action
-              ? `${words(snapshot.audio.action)} · ${snapshot.audio.is_final ? "complete" : "listening"}`
-              : "No request recognized yet"
-          }
-          status={snapshot?.audio ? "healthy" : "offline"}
-          score={snapshot?.audio?.confidence}
-        />
-        <SensorCard
-          title="Vision"
-          value={pointed ? words(pointed.object_id) : `${snapshot?.vision?.objects?.length ?? 0} visible`}
-          detail={pointed ? "Most likely pointing target" : "Waiting for a clear pointing target"}
-          status={snapshot?.vision ? "healthy" : "offline"}
-          score={pointed?.confidence}
-        />
-        <SensorCard
-          title="EMG"
-          value={words(emg?.label)}
-          detail={emg?.shadow_only ? "Detected, currently monitoring only" : "Available to confirm or cancel"}
-          status={signalStatus(snapshot?.biosignals?.emg)}
-          score={confidence(emg)}
-        />
-        <SensorCard
-          title="EEG"
-          value={eeg?.label === "artifact" ? "Movement detected" : eeg ? "Signal clear" : "Waiting"}
-          detail="Signal quality monitor · never commands the machine"
-          status={signalStatus(snapshot?.biosignals?.eeg)}
-          score={confidence(eeg)}
-        />
-      </section>
-
-      <div className="live-grid" style={{ marginTop: "14px" }}>
-        <CameraView vision={snapshot?.vision ?? null} preview={snapshot?.vision_preview} />
-        <div className="live-stack">
-          <DecisionCard snapshot={snapshot} />
-          <section className="panel">
-            <p className="eyebrow">Recent activity</p>
-            <h2>Decision log</h2>
-            <ol className="timeline">
-              {(snapshot?.timeline ?? []).length ? (
-                (snapshot?.timeline ?? []).slice(0, 8).map((item, index) => {
-                  const row = formatTimeline(item.kind, item.label);
-                  return (
-                    <li key={`${item.t_ms}-${index}`}>
-                      <time>{new Date(item.t_ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time>
-                      <span>
-                        <strong>{row.title}</strong>
-                        {row.detail}
-                      </span>
-                    </li>
-                  );
-                })
-              ) : (
-                <li>
-                  <time>—</time>
-                  <span><strong>No decisions yet</strong>Activity will appear here.</span>
-                </li>
-              )}
-            </ol>
-          </section>
-        </div>
-
-        <div className="live-bottom">
-          <section className="panel">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Signal detail</p>
-                <h2>Biosignal quality</h2>
-              </div>
-              <span className="muted">Raw traces stay available for diagnosis</span>
+    <details className="card diagnostics">
+      <summary>
+        <span>Signals & services</span>
+        <span className="muted">
+          {unhealthy.length ? `${unhealthy.length} need attention` : `${services.length} healthy`}
+        </span>
+      </summary>
+      <div className="diag-grid">
+        <SignalBlock title="EMG · Ganglion" health={snapshot?.biosignals?.emg} feature={snapshot?.features?.emg} plot={plots.emg} />
+        <SignalBlock title="EEG · Crown (monitor only)" health={snapshot?.biosignals?.eeg} feature={snapshot?.features?.eeg} plot={plots.eeg} />
+        <div className="service-list">
+          {services.map((item) => (
+            <div className="service-row" key={item.id}>
+              <StatusPill status={item.status} label={item.name} />
+              <small title={item.recovery ?? item.detail ?? undefined}>
+                {item.status === "healthy" ? ago(item.last_heartbeat_age_ms) : item.detail ?? item.recovery ?? ago(item.last_heartbeat_age_ms)}
+              </small>
             </div>
-            <div className="biosignal-grid">
-              <SignalDetail
-                title="Ganglion · EMG"
-                note="Forearm gesture"
-                health={snapshot?.biosignals?.emg}
-                feature={emg}
-                plot={plots.emg}
-              />
-              <SignalDetail
-                title="Crown · EEG"
-                note="Quality and artifact monitor"
-                health={snapshot?.biosignals?.eeg}
-                feature={eeg}
-                plot={plots.eeg}
-              />
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">System</p>
-                <h2>Connections</h2>
-              </div>
-              <StatusPill status={connected ? "healthy" : "offline"} />
-            </div>
-            <div className="service-grid">
-              {(snapshot?.services ?? []).map((service) => (
-                <div className="service-row" key={service.id}>
-                  <span><StatusPill status={service.status} label={service.name} /></span>
-                  <small>{age(service.last_heartbeat_age_ms)}</small>
-                </div>
-              ))}
-            </div>
-          </section>
+          ))}
         </div>
       </div>
+    </details>
+  );
+}
 
-      {snapshot?.mock ? (
-        <details className="test-tools">
-          <summary>Simulation tools</summary>
-          <div className="btn-row">
-            <button type="button" className="btn" disabled={busy} onClick={() => runDemo("success")}>Clear request</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => runDemo("conflict")}>Conflicting signals</button>
-            <button type="button" className="btn" disabled={busy} onClick={() => runDemo("cancel")}>Cancellation</button>
-          </div>
-          {demoNote ? <p className="muted" role="status">{demoNote}</p> : null}
-        </details>
+function MockTools() {
+  const { busy, message, run } = useBusyAction();
+  const [note, setNote] = useState<string | null>(null);
+  const send = (scenario: DemoScenario) =>
+    run(async () => {
+      const result = await api.runDemo(scenario);
+      setNote(`${words(scenario)} · ${result.events_injected} synthetic events injected`);
+    });
+  return (
+    <details className="card diagnostics">
+      <summary>
+        <span>Synthetic test events</span>
+        <span className="muted">mock stack only</span>
+      </summary>
+      <p className="muted">Injects recorded fixtures instead of real sensor data. Not available on the hardware stack.</p>
+      <div className="btn-row">
+        <button type="button" className="btn" disabled={busy} onClick={() => send("success")}>Clear request</button>
+        <button type="button" className="btn" disabled={busy} onClick={() => send("conflict")}>Conflicting signals</button>
+        <button type="button" className="btn" disabled={busy} onClick={() => send("cancel")}>Cancellation</button>
+      </div>
+      {note ? <p className="muted" role="status">{note}</p> : null}
+      {message ? <p className="error">{message}</p> : null}
+    </details>
+  );
+}
+
+export default function OperatePage() {
+  const { snapshot, plots, connected } = useLive();
+  return (
+    <div className="operate">
+      {!connected ? (
+        <p className="banner banner-bad" role="status">
+          Console API unreachable. Start the stack with <code>just run-hardware</code>; values below may be stale.
+        </p>
       ) : null}
-    </>
+      <SessionBar snapshot={snapshot} />
+      <Pipeline snapshot={snapshot} />
+      <div className="operate-grid">
+        <CameraView vision={snapshot?.vision ?? null} preview={snapshot?.vision_preview} />
+        <div className="operate-side">
+          <DecisionPanel snapshot={snapshot} />
+          <Activity snapshot={snapshot} />
+        </div>
+      </div>
+      <Diagnostics snapshot={snapshot} plots={plots} />
+      {snapshot?.mock ? <MockTools /> : null}
+    </div>
   );
 }

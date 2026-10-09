@@ -36,6 +36,8 @@ models/**/*.joblib
 models/**/*.pt
 models/**/*.onnx
 models/emg/**
+models/vision/*
+!models/vision/.gitkeep
 !models/emg/.gitkeep
 
 # OS / IDE

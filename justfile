@@ -11,6 +11,9 @@ contracts-test:
     {{python}} -m pytest tests/contract -q
     pnpm --filter @intent/contracts test
 
+fetch-models:
+    {{python}} scripts/fetch_models.py
+
 preflight:
     {{python}} scripts/preflight.py
 

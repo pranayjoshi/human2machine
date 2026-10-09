@@ -328,7 +328,52 @@ def _mlx_transcribe_wav(
         Path(path).unlink(missing_ok=True)
 
 
-def resolve_asr() -> Callable[[NDArray[np.floating], int], AsrResult] | None:
+PARAKEET_MODEL = "mlx-community/parakeet-tdt-0.6b-v3"
+
+
+def _make_parakeet() -> Callable[[NDArray[np.floating], int], AsrResult]:
+    """NVIDIA Parakeet TDT 0.6B v3 on MLX: lower WER and latency than whisper-tiny."""
+    import mlx.core as mx
+    from parakeet_mlx import from_pretrained
+    from parakeet_mlx.audio import get_logmel
+
+    model = from_pretrained(PARAKEET_MODEL)
+    target_rate = int(model.preprocessor_config.sample_rate)
+    # The first MLX call compiles kernels (~4 s); pay it before the mic opens.
+    model.generate(get_logmel(mx.zeros(target_rate // 2), model.preprocessor_config))
+
+    def _parakeet(audio: NDArray[np.floating], sample_rate_hz: int) -> AsrResult:
+        array = np.asarray(audio, dtype=np.float32).reshape(-1)
+        if int(sample_rate_hz) != target_rate and array.size:
+            count = int(array.size * target_rate / sample_rate_hz)
+            positions = np.linspace(0, array.size - 1, count)
+            array = np.interp(positions, np.arange(array.size), array).astype(np.float32)
+        mel = get_logmel(mx.array(array), model.preprocessor_config)
+        result = model.generate(mel)[0]
+        # Parakeet TDT exposes no calibrated token confidence; never fabricate one.
+        return AsrResult(transcript=str(result.text).strip(), confidence=None)
+
+    return _parakeet
+
+
+def resolve_asr(
+    backend: str | None = None,
+) -> Callable[[NDArray[np.floating], int], AsrResult] | None:
+    if (backend or "parakeet").lower() == "parakeet":
+        try:
+            asr = _make_parakeet()
+            print(
+                '{"event":"asr_backend","backend":"parakeet-mlx",'
+                '"model":"parakeet-tdt-0.6b-v3","service":"audio-adapter"}',
+                flush=True,
+            )
+            return asr
+        except Exception as exc:
+            print(
+                '{"event":"asr_backend_unavailable","backend":"parakeet-mlx",'
+                f'"error":{str(exc)!r},"service":"audio-adapter"}}',
+                flush=True,
+            )
     try:
         import mlx_whisper  # noqa: F401
 
@@ -372,6 +417,8 @@ def describe_asr(asr: Callable[[NDArray[np.floating], int], Any] | None) -> str 
     if asr is _transcribe_with_mlx:
         return "mlx-whisper"
     name = getattr(asr, "__name__", "")
+    if name == "_parakeet":
+        return "parakeet-mlx"
     if name == "_whisper":
         return "openai-whisper"
     if name == "_transcribe_with_mlx":
@@ -447,8 +494,11 @@ class AudioHardwareRuntime:
         stream_factory: Callable[..., Any] | None = None,
         research_recording: bool = False,
         use_webrtc: bool = True,
+        asr_backend: str | None = None,
+        vocabulary: dict[str, str] | None = None,
     ) -> None:
         self.sample_rate_hz = sample_rate_hz
+        self.vocabulary = vocabulary
         self.device_name = device_name
         self.phrase = phrase
         self.model_id = model_id
@@ -462,7 +512,7 @@ class AudioHardwareRuntime:
             max_utterance_ms=max_utterance_ms,
             use_webrtc=use_webrtc,
         )
-        self.asr = resolve_asr() if resolve_backend else asr
+        self.asr = resolve_asr(asr_backend) if resolve_backend else asr
         self._stream_factory = stream_factory
         self._stream: Any | None = None
         self._started = False
@@ -593,12 +643,14 @@ class AudioHardwareRuntime:
         end_ns: int,
         asr_confidence: float | None = None,
     ) -> list[EventEnvelope]:
-        parsed = parse_utterance(transcript, asr_confidence=asr_confidence)
+        parsed = parse_utterance(
+            transcript, asr_confidence=asr_confidence, vocabulary=self.vocabulary
+        )
         quality = 0.9 if is_final else 0.5
         events: list[EventEnvelope] = []
         if is_final:
             partial_text = transcript.split(" ")[0] if transcript.strip() else transcript
-            partial = parse_utterance(partial_text, asr_confidence=0.4)
+            partial = parse_utterance(partial_text, asr_confidence=0.4, vocabulary=self.vocabulary)
             events.append(
                 self._intent_event(
                     partial_text,

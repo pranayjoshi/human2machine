@@ -9,6 +9,7 @@ from intent_runtime.logging import configure_logging
 
 from audio_adapter.capture import AudioHardwareRuntime, list_sound_devices
 from audio_adapter.mock import AudioMockRuntime, find_repo_root
+from audio_adapter.parser import build_vocabulary
 from audio_adapter.publisher import BoundedAdapterPush, ListSink
 
 
@@ -103,6 +104,8 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
                 silence_end_ms=int(audio_cfg.get("silence_end_ms", 400)),
                 max_utterance_ms=int(audio_cfg.get("max_utterance_ms", 4000)),
                 research_recording=bool(args.research_recording),
+                asr_backend=audio_cfg.get("asr_backend"),
+                vocabulary=build_vocabulary(config.get("vision", {}).get("objects")),
             )
             try:
                 hardware.start()

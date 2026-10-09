@@ -69,21 +69,34 @@ audio:
   silence_end_ms: 400
   max_utterance_ms: 4000
   model_id: local-asr-v1
+  # parakeet (NVIDIA Parakeet TDT 0.6B v3 on MLX) | whisper
+  asr_backend: parakeet
   parser: grammar_v1
 
 vision:
   publish_hz: 12
   pointing_confidence_min: 0.55
   object_stale_ms: 400
+  # yoloe: open-vocabulary YOLOE-26 matched by each object's text prompt.
+  # hsv: legacy color thresholds + ArUco markers (blocks only).
+  detector: yoloe
+  detector_model: yoloe-26s-seg.pt
+  detector_min_confidence: 0.25
+  detector_imgsz: 640
+  # Describe the real objects on your table; the prompt is what YOLOE looks for.
   objects:
     - object_id: object_blue_1
       class_name: blue_block
+      prompt: blue block
     - object_id: object_red_1
       class_name: red_block
+      prompt: red block
     - object_id: object_green_1
       class_name: green_block
+      prompt: green block
     - object_id: object_yellow_1
       class_name: yellow_block
+      prompt: yellow block
 
 simulator:
   approach_ms: 400

@@ -91,6 +91,34 @@ ORDINAL_PATTERNS = (
     (re.compile(r"\b(fourth|4th)\b"), "fourth"),
 )
 DEICTIC_RE = re.compile(r"\b(that one|this one|those|these|that|this)\b")
+_VOCAB_STOPWORDS = frozenset({"the", "a", "an", "of", "object", "thing", "one"})
+
+
+def build_vocabulary(objects: list[dict] | None) -> dict[str, str]:
+    """Spoken phrase -> object_id from the configured table objects.
+
+    Each object's prompt and class name map to it, plus any single word that
+    no other object shares ("mug" for "red mug" when nothing else is a mug).
+    """
+    if not objects:
+        return dict(COLOR_TO_OBJECT)
+    phrases: dict[str, str] = {}
+    word_owners: dict[str, set[str]] = {}
+    for item in objects:
+        object_id = str(item["object_id"])
+        names = {
+            normalize_transcript(str(item.get(key) or "").replace("_", " "))
+            for key in ("prompt", "class_name")
+        }
+        for name in filter(None, names):
+            phrases[name] = object_id
+            for word in name.split():
+                if word not in _VOCAB_STOPWORDS:
+                    word_owners.setdefault(word, set()).add(object_id)
+    for word, owners in word_owners.items():
+        if len(owners) == 1:
+            phrases.setdefault(word, next(iter(owners)))
+    return phrases
 
 
 @dataclass(frozen=True)
@@ -120,7 +148,12 @@ def _first_phrase(text: str, phrases: tuple[str, ...]) -> str | None:
     return None
 
 
-def parse_utterance(transcript: str, *, asr_confidence: float | None = None) -> ParseResult:
+def parse_utterance(
+    transcript: str,
+    *,
+    asr_confidence: float | None = None,
+    vocabulary: dict[str, str] | None = None,
+) -> ParseResult:
     text = normalize_transcript(transcript)
     if not text:
         return _finished("UNKNOWN", TargetReference.NONE, None, 0.1, asr_confidence)
@@ -144,8 +177,11 @@ def parse_utterance(transcript: str, *, asr_confidence: float | None = None) -> 
 
     target_reference: str = TargetReference.NONE
     target_object_id: str | None = None
-    for color, object_id in COLOR_TO_OBJECT.items():
-        if re.search(rf"\b{color}\b", text):
+    names = vocabulary or COLOR_TO_OBJECT
+    # Longest phrase first so "red mug" beats "red".
+    for name in sorted(names, key=len, reverse=True):
+        object_id = names[name]
+        if _contains_phrase(text, name):
             target_reference = TargetReference.NAMED
             target_object_id = object_id
             grammar = max(grammar, 0.88)

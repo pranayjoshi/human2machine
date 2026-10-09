@@ -214,6 +214,10 @@ def maybe_create_face_landmarker() -> Any | None:
         import mediapipe as mp
     except Exception:
         return None
+    if not hasattr(mp, "solutions"):
+        from vision_adapter.mediapipe_tasks import create_tasks_face
+
+        return create_tasks_face()
     try:
         return mp.solutions.face_mesh.FaceMesh(
             static_image_mode=False,

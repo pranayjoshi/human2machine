@@ -505,7 +505,7 @@ export function RobotSimulation({
         onPointerCancel={pointerUp}
         onWheel={wheel}
       />
-      <div className="robot-canvas-hint">Drag to orbit · scroll to zoom · select an object</div>
+      <div className="robot-canvas-hint">Drag to orbit · scroll to zoom</div>
       <div className={`robot-pause-indicator ${paused ? "show" : ""}`} aria-hidden={!paused}>
         <span>Ⅱ</span> Simulation paused
       </div>

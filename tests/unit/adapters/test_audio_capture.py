@@ -171,7 +171,7 @@ def test_slow_asr_does_not_run_inside_on_audio() -> None:
 def test_missing_asr_confidence_is_passed_as_none(monkeypatch) -> None:
     seen: list[float | None] = []
 
-    def spy(transcript: str, *, asr_confidence: float | None = None):
+    def spy(transcript: str, *, asr_confidence: float | None = None, vocabulary=None):
         seen.append(asr_confidence)
         return parse_utterance(transcript, asr_confidence=asr_confidence)
 
@@ -191,7 +191,7 @@ def test_whisper_wrap_does_not_fabricate_high_confidence(monkeypatch) -> None:
     assert extract_asr_confidence({"text": "stop", "segments": [{"avg_logprob": -0.05}]}) is None
     seen: list[float | None] = []
 
-    def spy(transcript: str, *, asr_confidence: float | None = None):
+    def spy(transcript: str, *, asr_confidence: float | None = None, vocabulary=None):
         seen.append(asr_confidence)
         return parse_utterance(transcript, asr_confidence=asr_confidence)
 
@@ -209,7 +209,7 @@ def test_whisper_wrap_does_not_fabricate_high_confidence(monkeypatch) -> None:
 def test_explicit_asr_confidence_is_forwarded(monkeypatch) -> None:
     seen: list[float | None] = []
 
-    def spy(transcript: str, *, asr_confidence: float | None = None):
+    def spy(transcript: str, *, asr_confidence: float | None = None, vocabulary=None):
         seen.append(asr_confidence)
         return parse_utterance(transcript, asr_confidence=asr_confidence)
 

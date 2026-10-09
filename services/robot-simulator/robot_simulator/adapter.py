@@ -327,8 +327,10 @@ class SimulatorMachineAdapter(MachineAdapter):
         return self._snapshot()
 
     def execute(self, command: ActionCommand) -> None:
-        now = self._clock.time_ns()
-        if command.expires_at_ns <= now:
+        # issued_at/expires_at are on the safety gateway's hub-normalized
+        # timeline, not this process's clock, so enforce the TTL it granted.
+        # Commands arrive over a local PUSH socket within milliseconds.
+        if command.expires_at_ns <= command.issued_at_ns:
             self._reject(command, "EXPIRED")
             return
         if (

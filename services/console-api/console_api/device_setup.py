@@ -41,9 +41,11 @@ def public_setup(root: Path, config: dict[str, Any], *, mock: bool) -> dict[str,
 
     crown_env = _crown_env_flags(root)
     crown_device = _nonempty(crown.get("device_id")) or crown_env["NEUROSITY_DEVICE_ID"]
+    crown_name = str(crown.get("device_id") or "").strip()
     env_vars_present = True
     if crown_device:
-        crown_detail = f"Crown nickname {crown_device}; OSC listen UDP 9000."
+        named = f"Crown {crown_name}" if crown_name else "Crown device set in .env"
+        crown_detail = f"{named}; OSC listens on UDP 9000."
     else:
         crown_detail = "Crown OSC listens on UDP 9000. Enable OSC in the Neurosity console."
     serial_port = ganglion.get("serial_port")

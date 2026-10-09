@@ -444,10 +444,18 @@ class ConsoleRuntime:
             self._push_timeline("safety", verdict, payload)
             return
         if event_type == EventType.MACHINE_STATE:
+            previous = self.machine or {}
             self.machine = payload
             if str(payload.get("state")) == "ESTOPPED":
                 self.estop_latched = True
-            self._push_timeline("machine", str(payload.get("state")), payload)
+            # The simulator republishes state for freshness; log transitions only.
+            if (previous.get("state"), previous.get("stage")) != (
+                payload.get("state"),
+                payload.get("stage"),
+            ):
+                self._push_timeline(
+                    "machine", str(payload.get("stage") or payload.get("state")), payload
+                )
             return
         if event_type == EventType.ACTION_OUTCOME:
             if session_id:

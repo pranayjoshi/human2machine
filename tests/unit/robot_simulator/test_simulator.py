@@ -57,6 +57,21 @@ def _connected() -> tuple[SimulatorMachineAdapter, object]:
     return adapter, clock
 
 
+def test_command_from_another_clock_domain_executes() -> None:
+    """Safety stamps commands on the hub's session-relative clock, not wall time."""
+    adapter, _clock = _connected()
+    command = make_command(
+        _clock,
+        command_id="cmd-hub",
+        idempotency_key="hub-key",
+        issued_at_ns=2_000_000_000,
+        expires_at_ns=3_000_000_000,
+    )
+    adapter.execute(command)
+    adapter.advance_ms(1200)
+    assert adapter.emitted_outcomes[-1].outcome == OutcomeKind.COMPLETED
+
+
 def test_connect_reaches_ready() -> None:
     adapter, _ = make_adapter()
     adapter.connect()
@@ -280,6 +295,26 @@ def test_service_ignores_intent_decision_and_publishes_valid_events() -> None:
     assert "action.outcome" in types
     for event in envelopes:
         parse_unnormalized_event(event.to_unnormalized_dict())
+
+
+def test_idle_service_keeps_machine_state_fresh(monkeypatch) -> None:
+    """Safety rejects machine state older than 500 ms, so idle READY must repeat."""
+    import robot_simulator.service as service_module
+
+    adapter, _clock = _connected()
+    sent: list[str] = []
+    push = type(
+        "Push", (), {"send_event": lambda self, event: sent.append(str(event.event_type))}
+    )()
+    service = SimulatorService(adapter, SimulatorSettings(), push=push)
+    now = [0]
+    monkeypatch.setattr(service_module, "now_monotonic_ns", lambda: now[0])
+    for step in range(10):
+        now[0] = step * 100_000_000 + 1
+        service._maybe_publish_state()
+    assert adapter.state is MachineState.READY
+    assert sent.count("machine.state") == 4  # t=0.2,0.4,0.6,0.8 s
+    assert service_module.STATE_IDLE_INTERVAL_NS < 500_000_000
 
 
 def test_main_requires_mock() -> None:

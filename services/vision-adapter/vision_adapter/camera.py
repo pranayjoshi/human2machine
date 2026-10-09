@@ -176,8 +176,10 @@ class VisionHardwareRuntime:
         config: dict[str, Any] | None = None,
         preview_path: Any | None = None,
         preview_hz: float = 8.0,
+        detector: Any | None = None,
     ) -> None:
         self.camera = camera
+        self.detector = detector
         self.catalog = catalog or [dict(row) for row in DEFAULT_CATALOG]
         self.pointing_confidence_min = pointing_confidence_min
         self.publish_hz = publish_hz
@@ -226,7 +228,10 @@ class VisionHardwareRuntime:
                     f"frame {width}x{height}. "
                     "Refuse to load at a different resolution without an explicit transform."
                 )
-        objects = detect_colored_objects(frame, self.catalog)
+        if self.detector is not None:
+            objects = self.detector.detect(frame)
+        else:
+            objects = detect_colored_objects(frame, self.catalog)
         if self.calibration is not None:
             objects = _apply_table_plane(objects, self.calibration)
         objects = self._tracker.update(objects, source_time_ns)
@@ -396,9 +401,15 @@ class VisionHardwareRuntime:
                 "status": status,
                 "device_alias": "vision-camera",
                 "detail": detail,
-                "metadata": {"detector": "hsv_color"},
+                "metadata": {"detector": self.detector_name},
             },
         )
+
+    @property
+    def detector_name(self) -> str:
+        if self.detector is None:
+            return "hsv_color"
+        return str(getattr(self.detector, "model_id", getattr(self.detector, "name", "custom")))
 
     def _next_seq(self) -> int:
         value = self.sequence

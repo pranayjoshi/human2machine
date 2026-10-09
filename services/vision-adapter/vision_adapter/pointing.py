@@ -184,6 +184,10 @@ def maybe_create_hands() -> Any | None:
         import mediapipe as mp
     except Exception:
         return None
+    if not hasattr(mp, "solutions"):
+        from vision_adapter.mediapipe_tasks import create_tasks_hands
+
+        return create_tasks_hands()
     try:
         return mp.solutions.hands.Hands(
             static_image_mode=False,

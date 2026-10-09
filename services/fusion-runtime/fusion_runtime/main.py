@@ -88,7 +88,11 @@ def _prune_window(
 
 
 def run(config: FusionConfig, *, heartbeat_seconds: float) -> None:
-    subscriber = NormalizedSubscriber(HUB_SUB)
+    # Subscribe by topic so raw biosignal/motion chunks never reach this process;
+    # parsing and discarding them made fusion fall seconds behind real time.
+    subscriber = NormalizedSubscriber(
+        HUB_SUB, topics=sorted(str(etype).encode() for etype in KEEP_TYPES)
+    )
     publisher = AdapterPush(HUB_PUSH)
     state = FusionRuntimeState()
     profile = UserProfile()

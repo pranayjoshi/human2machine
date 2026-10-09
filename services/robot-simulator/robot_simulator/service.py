@@ -39,6 +39,10 @@ _CANCEL = {"machine.cancel", "cancel", "CANCEL"}
 _RESUME = {"machine.resume", "resume", "RESUME"}
 
 
+STATE_EXECUTING_INTERVAL_NS = 100_000_000
+STATE_IDLE_INTERVAL_NS = 200_000_000
+
+
 class SimulatorService:
     def __init__(
         self,
@@ -138,7 +142,7 @@ class SimulatorService:
                     self.handle_message(raw)
                 self.adapter.tick()
                 self.drain()
-                self._maybe_publish_progress()
+                self._maybe_publish_state()
                 self._maybe_heartbeat()
         finally:
             self._running = False
@@ -156,11 +160,20 @@ class SimulatorService:
     def stop(self) -> None:
         self._running = False
 
-    def _maybe_publish_progress(self) -> None:
-        if self.adapter.state is not MachineState.EXECUTING:
-            return
+    def _maybe_publish_state(self) -> None:
+        """Republish state so consumers never see it go stale.
+
+        The safety gateway rejects machine state older than
+        ``max_machine_state_age_ms`` (500 ms), so an idle simulator that only
+        published on transitions would hold every request.
+        """
+        interval_ns = (
+            STATE_EXECUTING_INTERVAL_NS
+            if self.adapter.state is MachineState.EXECUTING
+            else STATE_IDLE_INTERVAL_NS
+        )
         now = now_monotonic_ns()
-        if now - self._last_progress_pub_ns < 100_000_000:
+        if now - self._last_progress_pub_ns < interval_ns:
             return
         self._last_progress_pub_ns = now
         self._send(EventType.MACHINE_STATE, self.adapter.get_state(), modality="machine")

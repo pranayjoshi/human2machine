@@ -38,6 +38,29 @@ SUB_TOPICS = [
 ]
 
 
+class HubClock:
+    """Maps local monotonic time onto the event hub's normalized timeline.
+
+    Events carry ``normalized_time_ns`` (session-relative). Idle polls must use
+    the same timeline, or pending confirmations look expired immediately.
+    """
+
+    def __init__(self) -> None:
+        self._offset_ns: int | None = None
+
+    def observe(self, normalized_time_ns: object) -> int:
+        local = now_monotonic_ns()
+        if normalized_time_ns is None:
+            return self.now_ns()
+        value = int(normalized_time_ns)  # type: ignore[arg-type]
+        self._offset_ns = value - local
+        return value
+
+    def now_ns(self) -> int:
+        local = now_monotonic_ns()
+        return local if self._offset_ns is None else local + self._offset_ns
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Deterministic safety gateway")
     parser.add_argument(
@@ -133,6 +156,7 @@ def run(args: argparse.Namespace) -> None:
     hub = AdapterPush(ports["hub_push"])
     commands = CommandPush(ports["command_push"])
     sub = NormalizedSubscriber(ports["normalized_sub"], topics=SUB_TOPICS)
+    hub_clock = HubClock()
     started = time.monotonic()
     last_beat = 0.0
     sequence = 0
@@ -161,7 +185,7 @@ def run(args: argparse.Namespace) -> None:
             raw = sub.recv_event(timeout_ms=100)
             if raw is None:
                 # Poll confirmation timeout even without inbound events.
-                now_ns = now_monotonic_ns()
+                now_ns = hub_clock.now_ns()
                 state, results = apply_event(state, {"event_type": "poll"}, config, now_ns=now_ns)
                 for result in results:
                     sequence = _publish_result(
@@ -176,7 +200,7 @@ def run(args: argparse.Namespace) -> None:
                 continue
 
             last_data_age_ms = 0.0
-            now_ns = int(raw.get("normalized_time_ns") or now_monotonic_ns())
+            now_ns = hub_clock.observe(raw.get("normalized_time_ns"))
             try:
                 state, results = apply_event(state, raw, config, now_ns=now_ns)
             except Exception:

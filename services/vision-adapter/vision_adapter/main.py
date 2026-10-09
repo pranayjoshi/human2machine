@@ -83,7 +83,8 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
                     "class_name": item.get("class_name", item["object_id"]),
                     "table_position_xy": pos,
                     "bbox_xyxy": bbox,
-                    "color": item.get("class_name", "").replace("_block", ""),
+                    "color": item.get("color") or item.get("class_name", "").replace("_block", ""),
+                    "prompt": item.get("prompt"),
                 }
             )
 
@@ -122,9 +123,21 @@ def main(argv: list[str] | None = None, sink: BoundedAdapterPush | ListSink | No
             except Exception as exc:
                 publisher.send_event(make_offline(f"failed to open camera: {exc}"))
                 return 1
+            hardware_catalog = catalog or [dict(row) for row in DEFAULT_CATALOG]
+            detector = None
+            try:
+                from vision_adapter.open_vocab import create_detector
+
+                detector = create_detector(hardware_catalog, vision_cfg)
+            except Exception as exc:
+                print(
+                    f'{{"event":"detector_unavailable","fallback":"hsv_color","error":{str(exc)!r}}}',
+                    flush=True,
+                )
             runtime = VisionHardwareRuntime(
                 camera,
-                catalog=catalog or [dict(row) for row in DEFAULT_CATALOG],
+                catalog=hardware_catalog,
+                detector=detector,
                 pointing_confidence_min=float(vision_cfg.get("pointing_confidence_min", 0.55)),
                 publish_hz=float(vision_cfg.get("publish_hz", 12)),
                 preview_path=find_repo_root() / "data" / "runtime" / "vision_preview.jpg",
