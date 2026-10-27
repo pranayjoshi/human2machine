@@ -248,6 +248,307 @@ function roundedLabel(
   ctx.restore();
 }
 
+/* ───────────── SO-101-style arm: kinematics and detailed parts ───────────── */
+
+const vAdd = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z });
+const vSub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+const vScale = (a: Vec3, k: number): Vec3 => ({ x: a.x * k, y: a.y * k, z: a.z * k });
+const vDot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
+const vCross = (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+const vNorm = (a: Vec3): Vec3 => vScale(a, 1 / (Math.hypot(a.x, a.y, a.z) || 1));
+const vMid = (a: Vec3, b: Vec3): Vec3 => vScale(vAdd(a, b), 0.5);
+const UP: Vec3 = { x: 0, y: 1, z: 0 };
+const LIGHT = vNorm({ x: -0.35, y: 0.9, z: 0.3 });
+
+const ARM_BASE: Vec3 = { x: -0.2, y: 0.73, z: -1.1 };
+const SHOULDER_HEIGHT = 0.62;
+const UPPER_ARM = 1.55;
+const FOREARM = 1.6;
+const WRIST_ROLL_LEN = 0.22;
+const JAW_LEN = 0.4;
+const PLATE_SIDE = 0.27;
+
+const ARM_COLORS = {
+  plate: "#e8e3d6",
+  servo: "#1c1f24",
+  metal: "#3b4046",
+  baseplate: "#2a2e33",
+  accent: "#d87855",
+  cable: "#121417",
+};
+
+export type ArmPose = {
+  shoulder: Vec3;
+  elbow: Vec3;
+  wrist: Vec3;
+  tip: Vec3;
+  u: Vec3;
+  s: Vec3;
+  g: Vec3;
+  aperture: number;
+  reachable: boolean;
+  /** Joint angles in degrees (gripper in percent open), named like the SO-101 joints. */
+  joints: Record<string, number>;
+};
+
+type Trajectory = {
+  effector: Vec3;
+  handoff: Vec3;
+  moving: boolean;
+  carrying: boolean;
+  p: number;
+  state: string;
+  stage: string;
+  aperture: number;
+  pitch: number;
+  selectedPosition: Vec3;
+  objectPositions: Vec3[];
+};
+
+function hexToRgb(hex: string): [number, number, number] {
+  const value = hex.replace("#", "");
+  return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
+}
+
+function shadeHex(hex: string, k: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const f = (channel: number) => Math.round(clamp(channel * k, 0, 255));
+  return `rgb(${f(r)},${f(g)},${f(b)})`;
+}
+
+function cameraPosition(camera: Camera): Vec3 {
+  const cp = Math.cos(camera.pitch);
+  return {
+    x: Math.sin(camera.yaw) * cp * camera.distance,
+    y: 0.9 + Math.sin(camera.pitch) * camera.distance,
+    z: Math.cos(camera.yaw) * cp * camera.distance,
+  };
+}
+
+function shadedFace(points: Vec3[], normal: Vec3, color: string, camera: Camera, width: number, height: number): RenderObject | null {
+  const center = vScale(points.reduce((sum, point) => vAdd(sum, point), { x: 0, y: 0, z: 0 }), 1 / points.length);
+  if (vDot(normal, vSub(cameraPosition(camera), center)) <= 0) return null;
+  const brightness = 0.56 + 0.52 * Math.max(0, vDot(normal, LIGHT));
+  return face(points, shadeHex(color, brightness), camera, width, height, "rgba(0,0,0,.3)");
+}
+
+function orientedBox(
+  center: Vec3, ax: Vec3, ay: Vec3, az: Vec3, half: [number, number, number],
+  color: string, camera: Camera, width: number, height: number,
+): RenderObject[] {
+  const corner = (sx: number, sy: number, sz: number): Vec3 =>
+    vAdd(center, vAdd(vScale(ax, sx * half[0]), vAdd(vScale(ay, sy * half[1]), vScale(az, sz * half[2]))));
+  const faces: [Vec3[], Vec3][] = [
+    [[corner(1, -1, -1), corner(1, 1, -1), corner(1, 1, 1), corner(1, -1, 1)], ax],
+    [[corner(-1, -1, 1), corner(-1, 1, 1), corner(-1, 1, -1), corner(-1, -1, -1)], vScale(ax, -1)],
+    [[corner(-1, 1, -1), corner(-1, 1, 1), corner(1, 1, 1), corner(1, 1, -1)], ay],
+    [[corner(-1, -1, 1), corner(-1, -1, -1), corner(1, -1, -1), corner(1, -1, 1)], vScale(ay, -1)],
+    [[corner(-1, -1, 1), corner(1, -1, 1), corner(1, 1, 1), corner(-1, 1, 1)], az],
+    [[corner(1, -1, -1), corner(-1, -1, -1), corner(-1, 1, -1), corner(1, 1, -1)], vScale(az, -1)],
+  ];
+  return faces
+    .map(([points, normal]) => shadedFace(points, normal, color, camera, width, height))
+    .filter((item): item is RenderObject => item != null);
+}
+
+function cylinder(
+  center: Vec3, axis: Vec3, radius: number, halfLength: number, color: string,
+  camera: Camera, width: number, height: number, sides = 18,
+): RenderObject[] {
+  const helper = Math.abs(axis.y) < 0.9 ? UP : { x: 1, y: 0, z: 0 };
+  const p = vNorm(vCross(axis, helper));
+  const q = vCross(axis, p);
+  const ring = (angle: number, offset: number): Vec3 =>
+    vAdd(center, vAdd(vScale(axis, offset), vAdd(vScale(p, Math.cos(angle) * radius), vScale(q, Math.sin(angle) * radius))));
+  const out: RenderObject[] = [];
+  for (let index = 0; index < sides; index += 1) {
+    const a0 = (index / sides) * Math.PI * 2;
+    const a1 = ((index + 1) / sides) * Math.PI * 2;
+    const mid = (a0 + a1) / 2;
+    const normal = vAdd(vScale(p, Math.cos(mid)), vScale(q, Math.sin(mid)));
+    const side = shadedFace([ring(a0, -halfLength), ring(a1, -halfLength), ring(a1, halfLength), ring(a0, halfLength)], normal, color, camera, width, height);
+    if (side) out.push(side);
+  }
+  const capPoints = (offset: number) => Array.from({ length: sides }, (_, index) => ring((index / sides) * Math.PI * 2, offset));
+  const top = shadedFace(capPoints(halfLength), axis, color, camera, width, height);
+  const bottom = shadedFace(capPoints(-halfLength), vScale(axis, -1), color, camera, width, height);
+  if (top) out.push(top);
+  if (bottom) out.push(bottom);
+  return out;
+}
+
+/** Two-link planar IK in the vertical plane that contains the shoulder and the target. */
+function solveArm(target: Vec3, pitchDeg: number, aperture: number): ArmPose {
+  const dx = target.x - ARM_BASE.x;
+  const dz = target.z - ARM_BASE.z;
+  const pan = Math.atan2(dx, dz);
+  const u: Vec3 = { x: Math.sin(pan), y: 0, z: Math.cos(pan) };
+  const s: Vec3 = { x: Math.cos(pan), y: 0, z: -Math.sin(pan) };
+  const phi = (pitchDeg * Math.PI) / 180;
+  const gripLocal = { r: Math.cos(phi), y: -Math.sin(phi) };
+  const gripLength = WRIST_ROLL_LEN + JAW_LEN;
+  const shoulder: Vec3 = { x: ARM_BASE.x, y: ARM_BASE.y + SHOULDER_HEIGHT, z: ARM_BASE.z };
+
+  let wristR = Math.hypot(dx, dz) - gripLocal.r * gripLength;
+  let wristY = target.y - gripLocal.y * gripLength - shoulder.y;
+  let distance = Math.hypot(wristR, wristY);
+  const maxDistance = UPPER_ARM + FOREARM - 0.002;
+  const minDistance = Math.abs(UPPER_ARM - FOREARM) + 0.15;
+  const reachable = distance <= maxDistance && distance >= minDistance;
+  if (distance > maxDistance) { wristR *= maxDistance / distance; wristY *= maxDistance / distance; distance = maxDistance; }
+  if (distance < minDistance) {
+    const k = minDistance / Math.max(distance, 1e-3);
+    wristR *= k; wristY *= k; distance = minDistance;
+  }
+  const toTarget = Math.atan2(wristY, wristR);
+  const cosInterior = clamp((UPPER_ARM * UPPER_ARM + distance * distance - FOREARM * FOREARM) / (2 * UPPER_ARM * distance), -1, 1);
+  const shoulderAngle = toTarget + Math.acos(cosInterior);
+  const elbowR = Math.cos(shoulderAngle) * UPPER_ARM;
+  const elbowY = Math.sin(shoulderAngle) * UPPER_ARM;
+  const place = (r: number, y: number): Vec3 => ({ x: ARM_BASE.x + u.x * r, y: shoulder.y + y, z: ARM_BASE.z + u.z * r });
+  const elbow = place(elbowR, elbowY);
+  const wrist = place(wristR, wristY);
+  const g: Vec3 = { x: u.x * gripLocal.r, y: gripLocal.y, z: u.z * gripLocal.r };
+  const tip = vAdd(wrist, vScale(g, gripLength));
+  const forearmAngle = Math.atan2(wristY - elbowY, wristR - elbowR);
+  const deg = (radians: number) => (radians * 180) / Math.PI;
+  return {
+    shoulder, elbow, wrist, tip, u, s, g, aperture, reachable,
+    joints: {
+      shoulder_pan: deg(pan),
+      shoulder_lift: deg(shoulderAngle),
+      elbow_flex: deg(shoulderAngle - forearmAngle),
+      wrist_flex: deg(-phi - forearmAngle),
+      wrist_roll: 0,
+      gripper: aperture,
+    },
+  };
+}
+
+function trajectoryFor(frame: SimulationFrame, objects: VisionObject[], selectedObjectId: string): Trajectory {
+  const objectPositions = objects.map(worldPosition);
+  const selectedIndex = Math.max(0, objects.findIndex((object) => object.object_id === selectedObjectId));
+  const selectedPosition = objectPositions[selectedIndex] ?? { x: 0.2, y: 0.92, z: 0 };
+  const state = frame.state.toUpperCase();
+  const stage = frame.stage.toUpperCase();
+  const moving = state === "EXECUTING" || state === "HOLDING";
+  const p = clamp(frame.progress, 0, 1);
+  const ready = { x: -0.2, y: 1.62, z: 0.95 };
+  const grasp = { x: selectedPosition.x, y: 1.12, z: selectedPosition.z };
+  const handoff = { x: 1.93, y: 1.72, z: -0.72 };
+  let effector = ready;
+  if (moving || state === "COMPLETED") {
+    if (p < 0.38) effector = mixVec(ready, grasp, p / 0.38);
+    else if (p < 0.51) effector = { ...grasp, y: grasp.y + Math.sin(((p - 0.38) / 0.13) * Math.PI) * 0.06 };
+    else if (p < 0.9) effector = mixVec(grasp, handoff, (p - 0.51) / 0.39);
+    else effector = handoff;
+  }
+  if (state === "ESTOPPED" || state === "FAULT") {
+    effector = p > 0 ? (p < 0.51 ? grasp : mixVec(grasp, handoff, clamp((p - 0.51) / 0.39, 0, 1))) : ready;
+  }
+  const carrying = frame.heldObjectId != null || (moving && p >= 0.45 && p < 0.96);
+  let aperture = 42;
+  let pitch = 72;
+  if (moving || state === "COMPLETED") {
+    if (p < 0.38) { aperture = 78; pitch = mix(72, 88, p / 0.38); }
+    else if (p < 0.51) { aperture = mix(78, 24, (p - 0.4) / 0.11); pitch = 88; }
+    else if (p < 0.9) { aperture = 24; pitch = mix(88, 48, (p - 0.51) / 0.39); }
+    else { aperture = mix(24, 78, (p - 0.9) / 0.1); pitch = 48; }
+  }
+  return { effector, handoff, moving, carrying, p, state, stage, aperture, pitch, selectedPosition, objectPositions };
+}
+
+/** Simulated arm pose for a machine frame; also drives the joint readout on the Robot page. */
+export function simulatedArmPose(frame: SimulationFrame, objects: VisionObject[], selectedObjectId: string): ArmPose {
+  const path = trajectoryFor(frame, objects, selectedObjectId);
+  return solveArm(path.effector, path.pitch, path.aperture);
+}
+
+function armParts(pose: ArmPose, toolColor: string, camera: Camera, width: number, height: number): { parts: RenderObject[]; shadows: RenderObject[] } {
+  const parts: RenderObject[] = [];
+  const shadows: RenderObject[] = [];
+  const world = { x: { x: 1, y: 0, z: 0 }, z: { x: 0, y: 0, z: 1 } };
+  const { shoulder, elbow, wrist, tip, u, s, g } = pose;
+  const box = (center: Vec3, ax: Vec3, ay: Vec3, az: Vec3, half: [number, number, number], color: string) =>
+    parts.push(...orientedBox(center, ax, ay, az, half, color, camera, width, height));
+  const ring = (center: Vec3, axis: Vec3, radius: number, thickness: number, color: string) =>
+    parts.push(...cylinder(center, axis, radius, thickness, color, camera, width, height));
+  const plateLink = (a: Vec3, b: Vec3, halfHeight: number) => {
+    const direction = vNorm(vSub(b, a));
+    const perpendicular = vNorm(vCross(s, direction));
+    const half: [number, number, number] = [vNorm(vSub(b, a)) && Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / 2 + 0.06, halfHeight, 0.035];
+    ([1, -1] as const).forEach((side) => box(vAdd(vMid(a, b), vScale(s, side * PLATE_SIDE)), direction, perpendicular, s, half, ARM_COLORS.plate));
+    box(vAdd(vMid(a, b), vScale(direction, 0.25)), direction, perpendicular, s, [0.04, halfHeight - 0.02, PLATE_SIDE], ARM_COLORS.metal);
+    box(vSub(vMid(a, b), vScale(direction, 0.25)), direction, perpendicular, s, [0.04, halfHeight - 0.02, PLATE_SIDE], ARM_COLORS.metal);
+  };
+
+  // Table-clamped base and pan servo.
+  box(vAdd(ARM_BASE, { x: 0, y: 0.05, z: 0 }), world.x, UP, world.z, [0.55, 0.05, 0.45], ARM_COLORS.baseplate);
+  ([-1, 1] as const).forEach((side) => box(vAdd(ARM_BASE, { x: side * 0.36, y: 0.12, z: 0 }), world.x, UP, world.z, [0.07, 0.07, 0.3], ARM_COLORS.metal));
+  box(vAdd(ARM_BASE, { x: 0, y: 0.3, z: 0 }), u, UP, s, [0.26, 0.18, 0.22], ARM_COLORS.servo);
+  ring(vAdd(ARM_BASE, { x: 0, y: 0.49, z: 0 }), UP, 0.31, 0.04, ARM_COLORS.accent);
+  box(vAdd(ARM_BASE, { x: 0, y: 0.56, z: 0 }), u, UP, s, [0.3, 0.05, 0.3], ARM_COLORS.plate);
+
+  // Shoulder bracket and servo.
+  ([1, -1] as const).forEach((side) => box(vAdd(vSub(shoulder, { x: 0, y: 0.05, z: 0 }), vScale(s, side * PLATE_SIDE)), u, UP, s, [0.2, 0.28, 0.035], ARM_COLORS.plate));
+  box(shoulder, u, UP, s, [0.24, 0.22, 0.17], ARM_COLORS.servo);
+  ring(vAdd(shoulder, vScale(s, PLATE_SIDE + 0.07)), s, 0.15, 0.03, ARM_COLORS.accent);
+
+  // Upper arm, elbow servo, forearm.
+  plateLink(shoulder, elbow, 0.17);
+  const upperDir = vNorm(vSub(elbow, shoulder));
+  const upperPerp = vNorm(vCross(s, upperDir));
+  box(elbow, upperDir, upperPerp, s, [0.22, 0.2, 0.17], ARM_COLORS.servo);
+  ring(vAdd(elbow, vScale(s, PLATE_SIDE + 0.07)), s, 0.14, 0.03, ARM_COLORS.accent);
+  plateLink(elbow, wrist, 0.15);
+
+  // Wrist flex servo, roll joint, gripper.
+  const foreDir = vNorm(vSub(wrist, elbow));
+  const forePerp = vNorm(vCross(s, foreDir));
+  box(wrist, foreDir, forePerp, s, [0.17, 0.15, 0.15], ARM_COLORS.servo);
+  ring(vAdd(wrist, vScale(s, 0.2)), s, 0.1, 0.025, ARM_COLORS.accent);
+  const gripPerp = vNorm(vCross(s, g));
+  ring(vAdd(wrist, vScale(g, 0.13)), g, 0.12, 0.1, ARM_COLORS.plate);
+  const gripBase = vAdd(wrist, vScale(g, WRIST_ROLL_LEN));
+  box(vAdd(gripBase, vScale(g, 0.1)), g, gripPerp, s, [0.12, 0.13, 0.17], ARM_COLORS.servo);
+  const jawOffset = 0.12;
+  const fixedStart = vAdd(gripBase, vScale(s, jawOffset));
+  box(vAdd(fixedStart, vScale(g, JAW_LEN / 2)), g, gripPerp, s, [JAW_LEN / 2, 0.07, 0.025], ARM_COLORS.plate);
+  box(vAdd(fixedStart, vScale(g, JAW_LEN - 0.03)), g, gripPerp, s, [0.05, 0.075, 0.035], toolColor);
+  const angle = (pose.aperture / 100) * 0.55;
+  const jawDir = vNorm(vAdd(vScale(g, Math.cos(angle)), vScale(s, -Math.sin(angle))));
+  const jawSide = vNorm(vCross(jawDir, gripPerp));
+  const movingStart = vSub(gripBase, vScale(s, jawOffset));
+  box(vAdd(movingStart, vScale(jawDir, JAW_LEN / 2)), jawDir, gripPerp, jawSide, [JAW_LEN / 2, 0.07, 0.025], ARM_COLORS.plate);
+  box(vAdd(movingStart, vScale(jawDir, JAW_LEN - 0.03)), jawDir, gripPerp, jawSide, [0.05, 0.075, 0.035], toolColor);
+
+  // Servo cable running along the links.
+  const cable = [
+    vAdd(ARM_BASE, vAdd(vScale(s, 0.38), { x: 0, y: 0.2, z: 0 })),
+    vAdd(shoulder, vAdd(vScale(s, PLATE_SIDE + 0.1), { x: 0, y: -0.2, z: 0 })),
+    vAdd(vMid(shoulder, elbow), vAdd(vScale(s, PLATE_SIDE + 0.08), vScale(upperPerp, 0.12))),
+    vAdd(elbow, vAdd(vScale(s, PLATE_SIDE + 0.1), vScale(upperPerp, 0.1))),
+    vAdd(vMid(elbow, wrist), vAdd(vScale(s, PLATE_SIDE + 0.08), vScale(forePerp, 0.1))),
+    vAdd(wrist, vScale(s, 0.22)),
+  ];
+  for (let index = 0; index < cable.length - 1; index += 1) {
+    const segment = line3d(cable[index], cable[index + 1], ARM_COLORS.cable, 0.035, camera, width, height);
+    if (segment) parts.push(segment);
+  }
+
+  // Soft contact shadows on the table.
+  const onTable = (point: Vec3): Vec3 => ({ x: point.x + (point.y - 0.74) * 0.34, y: 0.745, z: point.z + (point.y - 0.74) * 0.22 });
+  const shadowColor = "rgba(0,0,0,.16)";
+  const chain: [Vec3, Vec3, number][] = [[shoulder, elbow, 0.14], [elbow, wrist, 0.12], [wrist, tip, 0.1]];
+  chain.forEach(([a, b, widthWorld]) => {
+    const segment = line3d(onTable(a), onTable(b), shadowColor, widthWorld, camera, width, height);
+    if (segment) shadows.push(segment);
+  });
+  const baseShadow = disc3d(vAdd(onTable(vAdd(ARM_BASE, { x: 0, y: 0.3, z: 0 })), { x: 0.06, y: 0, z: 0.04 }), 0.5, shadowColor, camera, width, height, true);
+  if (baseShadow) shadows.push(baseShadow);
+  return { parts, shadows };
+}
+
 function drawScene(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -289,63 +590,16 @@ function drawScene(
     if (segment) renderObjects.push(segment);
   }
 
-  const objectPositions = objects.map(worldPosition);
-  const selectedIndex = Math.max(0, objects.findIndex((object) => object.object_id === selectedObjectId));
-  const selectedPosition = objectPositions[selectedIndex] ?? { x: 0.2, y: 0.92, z: 0 };
-  const state = frame.state.toUpperCase();
-  const stage = frame.stage.toUpperCase();
-  const moving = state === "EXECUTING" || state === "HOLDING";
-  const p = clamp(frame.progress, 0, 1);
-  const base = { x: -1.92, y: 1.03, z: 0.92 };
-  const ready = { x: -0.78, y: 1.84, z: 0.58 };
-  const grasp = { x: selectedPosition.x, y: 1.12, z: selectedPosition.z };
-  const handoff = { x: 1.93, y: 1.72, z: -0.72 };
-  let effector = ready;
-  if (moving || state === "COMPLETED") {
-    if (p < 0.38) effector = mixVec(ready, grasp, p / 0.38);
-    else if (p < 0.51) effector = { ...grasp, y: grasp.y + Math.sin(((p - 0.38) / 0.13) * Math.PI) * 0.06 };
-    else if (p < 0.9) effector = mixVec(grasp, handoff, (p - 0.51) / 0.39);
-    else effector = handoff;
-  }
-  if (state === "ESTOPPED" || state === "FAULT") {
-    effector = p > 0 ? (p < 0.51 ? grasp : mixVec(grasp, handoff, clamp((p - 0.51) / 0.39, 0, 1))) : ready;
-  }
-  const robotXY = frame.robotXY;
-  if (robotXY?.length === 2 && robotXY.every(Number.isFinite)) {
-    const normalized = { x: mix(-1.65, 1.55, robotXY[0]), y: effector.y, z: mix(-1.05, 1.05, robotXY[1]) };
-    effector = normalized;
-  }
-
-  const wrist = mixVec(base, effector, 0.72);
-  wrist.y += 0.32;
-  wrist.z += 0.05;
-  const elbow = mixVec(base, wrist, 0.47);
-  elbow.y += 0.7 + Math.min(0.25, Math.abs(effector.x - base.x) * 0.05);
-  elbow.z += 0.22;
-
-  renderObjects.push(...box({ x: -1.92, y: 0.91, z: 0.92 }, { x: 0.72, y: 0.34, z: 0.72 }, ["#d9ddda", "#8d9794", "#5e6966"], camera, width, height));
-  const links: [Vec3, Vec3][] = [[base, elbow], [elbow, wrist], [wrist, effector]];
-  links.forEach(([a, b], index) => {
-    const shadow = line3d(a, b, "#65716e", index === 2 ? 0.15 : 0.2, camera, width, height);
-    const highlight = line3d(a, b, COLORS.arm, index === 2 ? 0.105 : 0.145, camera, width, height);
-    if (shadow) renderObjects.push(shadow);
-    if (highlight) renderObjects.push(highlight);
-  });
-  [base, elbow, wrist].forEach((joint, index) => {
-    const disc = disc3d(joint, index === 0 ? 0.19 : 0.15, COLORS.joint, camera, width, height);
-    if (disc) renderObjects.push(disc);
-  });
-
+  const groundCount = renderObjects.length;
+  const path = trajectoryFor(frame, objects, selectedObjectId);
+  const { effector, handoff, moving, carrying, state, stage, objectPositions } = path;
   const faulted = state === "FAULT" || state === "ESTOPPED";
   const toolColor = faulted ? COLORS.danger : moving ? COLORS.accent : "#5f706b";
-  const gripper = disc3d(effector, 0.12, toolColor, camera, width, height, moving && !faulted);
-  if (gripper) renderObjects.push(gripper);
-  const fingerA = line3d(effector, { x: effector.x + 0.13, y: effector.y - 0.12, z: effector.z + 0.06 }, toolColor, 0.035, camera, width, height);
-  const fingerB = line3d(effector, { x: effector.x - 0.03, y: effector.y - 0.13, z: effector.z - 0.13 }, toolColor, 0.035, camera, width, height);
-  if (fingerA) renderObjects.push(fingerA);
-  if (fingerB) renderObjects.push(fingerB);
+  const pose = solveArm(effector, path.pitch, path.aperture);
+  const arm = armParts(pose, toolColor, camera, width, height);
+  renderObjects.push(...arm.parts);
+  const shadows: RenderObject[] = [...arm.shadows];
 
-  const carrying = frame.heldObjectId != null || (moving && p >= 0.45 && p < 0.96);
   objects.forEach((object, index) => {
     const selected = object.object_id === selectedObjectId;
     if (carrying && selected) return;
@@ -356,6 +610,8 @@ function drawScene(
         ? ["#8bb8a0", "#557f6b", "#334f43"]
         : ["#e0bc65", "#a98537", "#675526"];
     renderObjects.push(...box(position, { x: 0.34, y: 0.34, z: 0.34 }, palette, camera, width, height));
+    const shade = disc3d({ x: position.x + 0.07, y: 0.745, z: position.z + 0.05 }, 0.2, "rgba(0,0,0,.28)", camera, width, height, true);
+    if (shade) shadows.push(shade);
     if (selected) {
       const pulse = 0.24 + Math.sin(time / 320) * 0.025;
       const marker = disc3d({ ...position, y: 0.765 }, pulse, "rgba(225,120,82,.32)", camera, width, height, true);
@@ -363,19 +619,29 @@ function drawScene(
     }
   });
   if (carrying) {
-    renderObjects.push(...box({ ...effector, y: effector.y - 0.22 }, { x: 0.3, y: 0.3, z: 0.3 }, ["#e18a65", "#b9563d", "#71382e"], camera, width, height));
+    const carried = vAdd(pose.tip, vScale(pose.g, -0.1));
+    renderObjects.push(...box({ ...carried, y: carried.y - 0.06 }, { x: 0.3, y: 0.3, z: 0.3 }, ["#e18a65", "#b9563d", "#71382e"], camera, width, height));
   }
 
   const handoffMarker = disc3d({ x: handoff.x, y: 0.77, z: handoff.z }, 0.35, "rgba(143,197,168,.22)", camera, width, height, stage.includes("HANDOFF"));
-  if (handoffMarker) renderObjects.push(handoffMarker);
-  renderObjects.sort((a, b) => b.depth - a.depth).forEach((item) => item.draw(ctx));
+  if (handoffMarker) shadows.push(handoffMarker);
+  const byDepth = (a: RenderObject, b: RenderObject) => b.depth - a.depth;
+  renderObjects.slice(0, groundCount).sort(byDepth).forEach((item) => item.draw(ctx));
+  shadows.sort(byDepth).forEach((item) => item.draw(ctx));
+  renderObjects.slice(groundCount).sort(byDepth).forEach((item) => item.draw(ctx));
 
+  const placedLabels: { x: number; y: number }[] = [];
   objects.forEach((object, index) => {
     const position = carrying && object.object_id === selectedObjectId
-      ? { ...effector, y: effector.y - 0.06 }
+      ? { ...pose.tip, y: pose.tip.y - 0.1 }
       : objectPositions[index];
     const point = project({ ...position, y: position.y + 0.32 }, camera, width, height);
-    if (point) roundedLabel(ctx, point, object.class_name.replaceAll("_", " "), object.object_id === selectedObjectId);
+    if (!point) return;
+    let lift = 0;
+    while (placedLabels.some((other) => Math.abs(other.x - point.x) < 96 && Math.abs(other.y - (point.y - lift)) < 25) && lift < 120) lift += 26;
+    const shifted = { ...point, y: point.y - lift };
+    placedLabels.push({ x: shifted.x, y: shifted.y });
+    roundedLabel(ctx, shifted, object.class_name.replaceAll("_", " "), object.object_id === selectedObjectId);
   });
 
   const handoffPoint = project({ ...handoff, y: 0.8 }, camera, width, height);

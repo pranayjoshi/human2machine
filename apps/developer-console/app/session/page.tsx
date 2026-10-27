@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { SIM_FRAME, SimulatedCamera, colorFor } from "@/components/SimulatedCamera";
 import { Sparkline } from "@/components/Sparkline";
 import { StatusPill } from "@/components/Status";
 import { API_BASE, api } from "@/lib/api";
@@ -240,40 +241,51 @@ function CameraView({ vision, preview }: { vision: VisionState | null; preview: 
     return () => window.clearInterval(id);
   }, [live]);
 
+  const simulated = !live && objects.length > 0;
+  const frameW = simulated ? SIM_FRAME.width : width;
+  const frameH = simulated ? SIM_FRAME.height : height;
+  const unit = simulated ? 0.62 : 1;
+
   return (
     <section className="card camera-card" aria-labelledby="camera-heading">
       <header className="card-head">
         <h2 id="camera-heading">Workspace camera</h2>
         <span className="muted">
           {objects.length} object{objects.length === 1 ? "" : "s"}
-          {live ? "" : " · no video feed"}
+          {live ? "" : simulated ? " · simulated view, no live camera" : " · no video feed"}
         </span>
       </header>
       <div className="camera-stage">
         {live ? <img src={`${API_BASE}/api/vision/preview?t=${tick}`} alt="Live tabletop camera" width={width} height={height} /> : null}
-        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Detected objects">
-          {!live ? <rect width={width} height={height} fill="#17191f" /> : null}
+        {simulated ? <SimulatedCamera objects={objects} /> : null}
+        <svg viewBox={`0 0 ${frameW} ${frameH}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Detected objects">
           {objects.map((object) => {
             const [x1, y1, x2, y2] = object.bbox_xyxy;
             const selected = object.object_id === pointed;
+            const stroke = selected ? "#f2c56d" : simulated ? colorFor(object.class_name) : "#ffffff";
+            const label = `${words(object.class_name)} ${percent(object.confidence)}`;
+            const arm = Math.min(x2 - x1, y2 - y1) * 0.28;
+            const fontSize = 18 * unit * (simulated ? 1.05 : 1);
+            const labelWidth = label.length * fontSize * 0.56 + 14 * unit;
             return (
               <g key={object.object_id}>
-                <rect
-                  x={x1}
-                  y={y1}
-                  width={x2 - x1}
-                  height={y2 - y1}
-                  fill={selected ? "rgba(242,197,109,.18)" : "none"}
-                  stroke={selected ? "#f2c56d" : "#ffffff"}
-                  strokeWidth={selected ? 5 : 2}
+                <rect x={x1} y={y1} width={x2 - x1} height={y2 - y1} fill={selected ? "rgba(242,197,109,.16)" : "none"} stroke={stroke} strokeWidth={(selected ? 5 : 2) * unit} strokeOpacity={simulated ? 0.35 : 1} />
+                <path
+                  d={`M${x1} ${y1 + arm}V${y1}H${x1 + arm} M${x2 - arm} ${y1}H${x2}V${y1 + arm} M${x2} ${y2 - arm}V${y2}H${x2 - arm} M${x1 + arm} ${y2}H${x1}V${y2 - arm}`}
+                  fill="none"
+                  stroke={stroke}
+                  strokeWidth={(selected ? 6 : 4) * unit}
+                  strokeLinecap="square"
                 />
-                <text x={x1 + 8} y={y1 + 24} fill="#ffffff" fontSize="18">
-                  {words(object.class_name)} {percent(object.confidence)}
+                <rect x={x1} y={y1 - 24 * unit - 4 * unit} width={labelWidth} height={24 * unit} rx={4 * unit} fill="rgba(12,14,18,.78)" />
+                <text x={x1 + 7 * unit} y={y1 - 9.5 * unit} fill="#ffffff" fontSize={fontSize} fontWeight="600">
+                  {label}
                 </text>
               </g>
             );
           })}
         </svg>
+        {simulated ? <span className="camera-badge">SIMULATED CAMERA · overhead · {SIM_FRAME.width}×{SIM_FRAME.height}</span> : null}
         {!live && !objects.length ? <p className="camera-empty">Camera offline</p> : null}
       </div>
     </section>

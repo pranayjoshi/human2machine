@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 
-import { RobotSimulation, type SimulationFrame } from "@/components/RobotSimulation";
+import { RobotSimulation, simulatedArmPose, type SimulationFrame } from "@/components/RobotSimulation";
 import { StatusPill } from "@/components/Status";
 import { api } from "@/lib/api";
 import { percent, words } from "@/lib/format";
 import { useBusyAction, useLive } from "@/lib/live";
+import type { MachineState } from "@/lib/types";
+import type { ArmPose } from "@/components/RobotSimulation";
 
 type CameraPreset = "orbit" | "top" | "side";
 const STAGES = ["Approach", "Grasp", "Handoff", "Release"];
@@ -44,6 +46,7 @@ export default function RobotPage() {
         robotXY: machine.robot_xy,
       }
     : null;
+  const pose = frame ? simulatedArmPose(frame, objects, target) : null;
   const outcome = machine?.last_outcome as { outcome?: string; action?: string; target_object_id?: string } | null | undefined;
 
   return (
@@ -116,6 +119,11 @@ export default function RobotPage() {
             <div><dt>Last outcome</dt><dd>{outcome?.outcome ? `${words(outcome.outcome)}${outcome.target_object_id ? ` · ${words(outcome.target_object_id)}` : ""}` : "—"}</dd></div>
             <div><dt>Mode</dt><dd>{words(mode)}</dd></div>
           </dl>
+          {machine?.machine_kind === "so_arm101" ? (
+            <ArmPanel machine={machine} busy={busy} run={run} />
+          ) : pose ? (
+            <SimulatedJoints pose={pose} />
+          ) : null}
           <h3 className="sub">Objects in workcell</h3>
           {objects.length ? (
             <ul className="object-list">
@@ -132,5 +140,93 @@ export default function RobotPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+const JOINT_ORDER = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"];
+
+function ArmPanel({
+  machine,
+  busy,
+  run,
+}: {
+  machine: MachineState;
+  busy: boolean;
+  run: (action: () => Promise<unknown>) => void;
+}) {
+  const ready = machine.state === "READY";
+  const moving = machine.state === "EXECUTING" || machine.state === "HOLDING";
+  const joints = machine.joints ?? {};
+  const setpoint = machine.setpoint ?? {};
+  const motion = machine.motion_live ? "Live: servos receive setpoints" : machine.backend === "lerobot" ? "Shadow: real arm read, never written" : "Virtual: dry run";
+  return (
+    <>
+      <h3 className="sub">Arm</h3>
+      <dl className="kv">
+        <div><dt>Backend</dt><dd>{words(machine.backend)}</dd></div>
+        <div><dt>Motion</dt><dd>{motion}</dd></div>
+        <div><dt>Armed</dt><dd>{machine.armed ? "Armed" : machine.require_arming ? "Disarmed" : "Not required"}</dd></div>
+        <div><dt>Skill</dt><dd>{machine.skill ? `${words(machine.skill)}${machine.waypoint ? ` · ${machine.waypoint}` : ""}` : "None"}</dd></div>
+      </dl>
+      <div className="btn-row">
+        {machine.armed ? (
+          <button type="button" className="btn" disabled={busy} onClick={() => run(() => api.machineControl("disarm"))}>
+            Disarm
+          </button>
+        ) : (
+          <button type="button" className="btn" disabled={busy || !ready} onClick={() => run(() => api.machineControl("arm"))}>
+            Arm
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn"
+          disabled={busy || !ready || moving || (machine.require_arming && !machine.armed)}
+          onClick={() => run(() => api.machineControl("home"))}
+        >
+          Home
+        </button>
+      </div>
+      {Object.keys(joints).length ? (
+        <table className="joint-table">
+          <thead>
+            <tr><th>Joint</th><th>Measured</th><th>Setpoint</th></tr>
+          </thead>
+          <tbody>
+            {JOINT_ORDER.filter((name) => name in joints).map((name) => (
+              <tr key={name}>
+                <td>{words(name)}</td>
+                <td>{joints[name].toFixed(1)}</td>
+                <td>{setpoint[name] !== undefined ? setpoint[name].toFixed(1) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+    </>
+  );
+}
+
+const JOINT_UNITS: Record<string, string> = { gripper: "% open" };
+
+function SimulatedJoints({ pose }: { pose: ArmPose }) {
+  return (
+    <>
+      <h3 className="sub">Arm · SO-101 style, 6-DoF (simulated)</h3>
+      <table className="joint-table">
+        <thead>
+          <tr><th>Joint</th><th>Angle</th></tr>
+        </thead>
+        <tbody>
+          {JOINT_ORDER.map((name) => (
+            <tr key={name}>
+              <td>{words(name)}</td>
+              <td>{Math.round(pose.joints[name] ?? 0)}{JOINT_UNITS[name] ? ` ${JOINT_UNITS[name]}` : "°"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted">{pose.reachable ? "Target within reach." : "Target at the edge of reach; the arm is stretched."} Angles come from the simulator's inverse kinematics, not from hardware.</p>
+    </>
   );
 }

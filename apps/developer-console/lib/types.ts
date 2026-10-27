@@ -159,6 +159,18 @@ export type MachineState = {
   fault_reason?: string | null;
   last_outcome?: Record<string, unknown> | null;
   health?: string;
+  // Physical arm adapter (machine_kind "so_arm101") only.
+  machine_kind?: string;
+  backend?: string;
+  motion_enabled?: boolean;
+  motion_live?: boolean;
+  armed?: boolean;
+  require_arming?: boolean;
+  skill?: string | null;
+  waypoint?: string | null;
+  joints?: Record<string, number>;
+  setpoint?: Record<string, number>;
+  reachable_object_ids?: string[];
 };
 
 export type ConfirmationState = {

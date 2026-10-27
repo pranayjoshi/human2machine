@@ -70,6 +70,8 @@ export const api = {
   cancel: (id: string) => apiPost<{ ok: boolean }>(`/api/confirmations/${id}/cancel`),
   estop: () => apiPost<{ ok: boolean }>("/api/machine/estop"),
   reset: () => apiPost<{ ok: boolean }>("/api/machine/reset"),
+  machineControl: (control: "arm" | "disarm" | "home") =>
+    apiPost<{ ok: boolean }>(`/api/machine/${control}`),
   sessions: () => apiGet<{ sessions: SessionRecord[] }>("/api/sessions"),
   session: (id: string) => apiGet<SessionRecord>(`/api/sessions/${id}`),
   replay: () => apiPost<{ ok: boolean; events_queued: number }>("/api/replay", { source: "fixtures" }),

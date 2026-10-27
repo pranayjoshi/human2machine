@@ -1179,3 +1179,10 @@ code { font-family: "SFMono-Regular", Consolas, monospace; font-size: .88em; }
   .setup-table th:nth-child(2), .setup-table td:nth-child(2) { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .chip-rec i { animation: none; } }
+
+.joint-table { margin-top: 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.joint-table th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; padding: 4px 0; }
+.joint-table td { padding: 5px 0; border-top: 1px solid var(--soft); }
+.joint-table td:not(:first-child), .joint-table th:not(:first-child) { text-align: right; }
+
+.camera-badge { position: absolute; left: 12px; top: 12px; padding: 5px 9px; border-radius: 5px; background: rgba(12, 14, 18, .72); color: rgba(255, 255, 255, .88); font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; font-weight: 600; letter-spacing: .08em; pointer-events: none; }

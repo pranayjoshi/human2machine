@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://humans2machines.com/sitemap.xml
