@@ -50,6 +50,8 @@ models/vision/*
 *.flac
 *.wav
 *.mp4
+# Landing-page videos are site assets, not recordings.
+!apps/developer-console/public/*.mp4
 !data/fixtures/**
 
 # Conda

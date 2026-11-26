@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 
 import { Hero } from "@/components/landing/Hero";
 import { LandingSections } from "@/components/landing/LandingSections";
+import { H2MLogo } from "@/components/landing/Logo";
 
 const WAITLIST_ENDPOINT = "https://script.google.com/macros/s/AKfycbwJqsdDgLunyxwSBdze1L9kN3lEsrgIHrJcoJ5VXdJaTEGpmr-yK7K7amNh2CSplWlu/exec";
 
@@ -52,7 +53,7 @@ export default function LandingPage() {
           </form>
         )}
       </section>
-      <footer className="immersive-footer"><strong className="h2m-wordmark">H<b>2</b>M</strong><nav className="lc-footer-links" aria-label="Footer"><a href="#product">PRODUCT</a><a href="#status">STATUS</a><a href="#about">ABOUT</a><a href="mailto:pranay@humans2machines.com">CONTACT</a><a href="/privacy">PRIVACY</a></nav><p>© {new Date().getFullYear()} H2M</p></footer>
+      <footer className="immersive-footer"><H2MLogo size={18} /><nav className="lc-footer-links" aria-label="Footer"><a href="#product">PRODUCT</a><a href="#status">STATUS</a><a href="#about">ABOUT</a><a href="mailto:pranay@humans2machines.com">CONTACT</a><a href="/privacy">PRIVACY</a></nav><p>© {new Date().getFullYear()} H2M</p></footer>
     </main>
   );
 }

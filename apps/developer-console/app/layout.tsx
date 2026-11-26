@@ -26,8 +26,12 @@ export const metadata: Metadata = {
   title: "Human to Machine — Human input, compiled",
   description: "H2M turns speech, vision, pointing and muscle (EMG) signals into confidence-scored, safety-gated instructions for machines.",
   icons: {
-    icon: "/h2m-mark.svg",
-    shortcut: "/h2m-mark.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/h2m-mark.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/h2m-icon.png",
   },
   openGraph: {
     title: "H2M — Human input, compiled.",

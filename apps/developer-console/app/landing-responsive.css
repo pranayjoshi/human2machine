@@ -289,7 +289,7 @@
   letter-spacing: -.08em;
 }
 .h2m-wordmark b {
-  color: var(--coral);
+  color: var(--accent);
   font-family: inherit;
   font-size: 1.2em;
   font-weight: inherit;
@@ -297,6 +297,9 @@
   vertical-align: -.03em;
 }
 .immersive-footer .h2m-wordmark { font-size: 18px; }
+.h2m-logo { display: inline-flex; align-items: center; gap: 9px; color: var(--ivory); }
+.h2m-mark { flex: none; }
+.immersive-footer .h2m-logo { justify-self: start; }
 .immersive-title { top: 14%; }
 .hero-definition {
   position: absolute;
@@ -306,7 +309,7 @@
   width: min(720px, 72vw);
   margin: 0;
   padding: 14px 22px;
-  border-top: 1px solid rgba(240,120,100,.55);
+  border-top: 1px solid rgba(212,245,92,.55);
   background: linear-gradient(90deg, transparent, rgba(84,16,29,.28), transparent);
   color: var(--ivory);
   font-size: 13px;
@@ -340,7 +343,7 @@
 .compiler-stream .map-wave { display: flex; width: 52px; height: 22px; }
 .compiler-stream > strong { font-size: 17px; }
 .compiler-stream > i { left: -20px; }
-.compiler-stream.active { box-shadow: inset 2px 0 var(--coral); }
+.compiler-stream.active { box-shadow: inset 2px 0 var(--accent); }
 .compiler-result > small { font-size: 5px; }
 .compiler-result code { font-size: 8px; }
 
@@ -394,7 +397,7 @@
   letter-spacing: .12em;
   text-decoration: none;
 }
-.immersive-footer > a:hover { color: var(--coral); }
+.immersive-footer > a:hover { color: var(--accent); }
 
 .privacy-page {
   min-height: 100svh;
@@ -407,11 +410,11 @@
   color: var(--ivory);
 }
 .privacy-back { color: var(--ivory); font-size: 20px; font-weight: 700; text-decoration: none; }
-.privacy-back span { color: var(--coral); font-size: 1.18em; }
+.privacy-back span { color: var(--accent); font-size: 1.18em; }
 .privacy-page article { width: min(720px,100%); margin: clamp(70px,13vh,140px) auto 0; }
-.privacy-page article > p { color: var(--coral); font-family: "SFMono-Regular",Consolas,monospace; font-size: 7px; letter-spacing: .14em; }
+.privacy-page article > p { color: var(--accent); font-family: "SFMono-Regular",Consolas,monospace; font-size: 7px; letter-spacing: .14em; }
 .privacy-page h1 { margin: 18px 0 64px; font-size: clamp(60px,10vw,116px); font-weight: 500; letter-spacing: -.075em; line-height: .82; }
-.privacy-page h1 em { color: var(--coral); font-family: Georgia,serif; font-weight: 400; }
+.privacy-page h1 em { padding: 0 .1em; background: var(--ivory); color: var(--ink); font-style: normal; }
 .privacy-page section { display: grid; grid-template-columns: 150px 1fr; gap: 30px; padding: 24px 0; border-top: 1px solid rgba(239,232,220,.16); }
 .privacy-page h2 { margin: 0; font-size: 13px; }
 .privacy-page section p { margin: 0; color: rgba(239,232,220,.66); font-size: 14px; line-height: 1.65; }
