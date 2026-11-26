@@ -103,7 +103,7 @@ export function LandingSections() {
               </p>
               <p className="lc-links">
                 <a href={`mailto:${FOUNDER.email}`}>{FOUNDER.email}</a>
-                {FOUNDER.linkedin ? <a href={FOUNDER.linkedin} rel="noopener noreferrer" target="_blank">LinkedIn &nearr;</a> : null}
+                {FOUNDER.linkedin ? <a href={FOUNDER.linkedin} rel="noopener noreferrer" target="_blank">LinkedIn</a> : null}
               </p>
             </div>
           </div>
