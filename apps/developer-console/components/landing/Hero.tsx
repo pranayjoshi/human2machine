@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { H2MLogo } from "./Logo";
 
@@ -10,20 +10,49 @@ import { H2MLogo } from "./Logo";
  */
 export function Hero() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const userPaused = useRef(false);
+  const [playing, setPlaying] = useState(false);
 
-  // Respect reduced motion: keep the poster frame instead of autoplaying.
+  // Safari only autoplays when the element is muted before play(); if the browser still refuses
+  // (Low Power Mode, per-site autoplay settings), retry on the first click, tap, key or scroll.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => {
-      if (query.matches) video.pause();
-      else void video.play().catch(() => undefined);
+    video.muted = true;
+    video.defaultMuted = true;
+    video.setAttribute("muted", "");
+
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    video.addEventListener("play", onPlay);
+    video.addEventListener("pause", onPause);
+    setPlaying(!video.paused);
+
+    const events = ["pointerdown", "keydown", "scroll", "touchstart"] as const;
+    const retry = () => {
+      if (!userPaused.current) void video.play().catch(() => undefined);
+      events.forEach((name) => window.removeEventListener(name, retry));
     };
-    sync();
-    query.addEventListener("change", sync);
-    return () => query.removeEventListener("change", sync);
+    void video.play().catch(() => events.forEach((name) => window.addEventListener(name, retry, { passive: true })));
+
+    return () => {
+      video.removeEventListener("play", onPlay);
+      video.removeEventListener("pause", onPause);
+      events.forEach((name) => window.removeEventListener(name, retry));
+    };
   }, []);
+
+  const toggle = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      userPaused.current = false;
+      void video.play().catch(() => undefined);
+    } else {
+      userPaused.current = true;
+      video.pause();
+    }
+  };
 
   return (
     <section className="lh-hero" id="top" aria-labelledby="lh-title">
@@ -32,10 +61,11 @@ export function Hero() {
         className="lh-video"
         src="/hero-loop.mp4"
         poster="/hero-poster.jpg"
+        autoPlay
         muted
         loop
         playsInline
-        preload="metadata"
+        preload="auto"
         aria-hidden="true"
       />
       <div className="lh-shade" aria-hidden="true" />
@@ -80,7 +110,12 @@ export function Hero() {
         </div>
       </div>
 
-      <p className="lh-caption">Real footage · SO-101 desk arm · forearm EMG band</p>
+      <div className="lh-caption">
+        <span>Real footage · SO-101 desk arm · forearm EMG band</span>
+        <button type="button" className="lh-toggle" onClick={toggle} aria-label={playing ? "Pause background video" : "Play background video"}>
+          {playing ? "Pause" : "Play"}
+        </button>
+      </div>
     </section>
   );
 }
